@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction } from "../types";
+import { Transaction, CategorizationRule } from "../types";
 
 // Initialize Gemini Client
 // CRITICAL: API KEY MUST BE FROM process.env.API_KEY
@@ -52,6 +52,63 @@ export const categorizeTransactionsAI = async (
     return JSON.parse(text);
   } catch (error) {
     console.error("Error categorizing transactions:", error);
+    return [];
+  }
+};
+
+/**
+ * Analyzes existing transactions to generate categorization rules.
+ */
+export const generateRulesFromHistory = async (
+  transactions: Transaction[],
+  availableCategories: string[]
+): Promise<CategorizationRule[]> => {
+  if (transactions.length < 5) return [];
+
+  // Filter out uncategorized items to learn from what is already sorted
+  const categorized = transactions.filter(t => 
+    t.category !== 'Uncategorized' && t.category !== 'General'
+  ).slice(0, 100); // Limit to 100 recent for performance
+
+  const prompt = `
+    Analyze these categorized transactions and create strict keyword matching rules.
+    Return a JSON array of rules. Each rule should have a 'keyword' (substring to match in description, lowercase) and a 'category'.
+    Only create rules where the pattern is obvious and reliable (e.g., 'uber' -> 'Transportation').
+    Available Categories: ${availableCategories.join(', ')}
+
+    Transactions:
+    ${JSON.stringify(categorized.map(t => ({ d: t.description, c: t.category })))}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    keyword: { type: Type.STRING },
+                    category: { type: Type.STRING }
+                },
+                required: ["keyword", "category"]
+            }
+        }
+      }
+    });
+
+    const rawRules = JSON.parse(response.text || "[]");
+    return rawRules.map((r: any) => ({
+        id: `rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        keyword: r.keyword.toLowerCase(),
+        category: r.category
+    }));
+
+  } catch (error) {
+    console.error("Error generating rules:", error);
     return [];
   }
 };

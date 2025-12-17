@@ -40,6 +40,12 @@ export interface Transaction {
   category: string; // String to allow AI flexibility, but roughly maps to Category enum
 }
 
+export interface CategorizationRule {
+  id: string;
+  keyword: string;
+  category: string;
+}
+
 export interface ChartData {
   name: string;
   value: number;
@@ -63,6 +69,7 @@ export interface Session {
   name: string;
   transactions: Transaction[];
   categories: string[];
+  rules: CategorizationRule[];
   createdAt: number;
   importSettings: ImportSettings;
 }
