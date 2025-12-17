@@ -30,7 +30,8 @@ import {
   RotateCcw,
   RefreshCw,
   Loader2,
-  CheckCircle
+  CheckCircle,
+  Eraser
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -99,6 +100,16 @@ const App: React.FC = () => {
     total: number;
     updated: number;
     finished: boolean;
+  } | null>(null);
+
+  // Sanitization Result State (Success Modal)
+  const [sanitizationResult, setSanitizationResult] = useState<{ count: number; categories: string[] } | null>(null);
+  
+  // Sanitization Proposal State (Confirmation Modal)
+  const [sanitizationProposal, setSanitizationProposal] = useState<{
+    totalCount: number;
+    unusedCount: number;
+    unusedCategories: string[];
   } | null>(null);
 
   // Computed active session
@@ -249,9 +260,9 @@ const App: React.FC = () => {
       try {
         const json = JSON.parse(event.target?.result as string);
         
-        // Basic validation schema check
-        if (!json.transactions || !Array.isArray(json.transactions) || !json.categories) {
-            throw new Error("Invalid file structure");
+        // Strict validation schema check
+        if (!json.transactions || !Array.isArray(json.transactions) || !json.categories || !Array.isArray(json.categories)) {
+            throw new Error("Invalid file structure: 'transactions' and 'categories' must be arrays.");
         }
 
         const newSession: Session = {
@@ -266,7 +277,7 @@ const App: React.FC = () => {
         alert("Session imported successfully!");
       } catch (err) {
         console.error(err);
-        alert("Failed to import session. Invalid JSON format.");
+        alert("Failed to import session. Invalid JSON format or missing data structures.");
       }
     };
     reader.readAsText(file);
@@ -535,6 +546,49 @@ const App: React.FC = () => {
     });
   };
 
+  const handleSanitizeCategories = () => {
+    try {
+        const transactions = activeSession.transactions || [];
+        const categories = activeSession.categories || [];
+
+        // 1. Identify used categories
+        const usedCategories = new Set(transactions.map(t => t.category));
+        
+        // 2. Identify categories to remove (not used AND not 'Uncategorized')
+        const categoriesToRemove = categories.filter(c => 
+            !usedCategories.has(c) && c !== 'Uncategorized'
+        );
+
+        // Show proposal modal
+        setSanitizationProposal({
+            totalCount: categories.length,
+            unusedCount: categoriesToRemove.length,
+            unusedCategories: categoriesToRemove
+        });
+    } catch (error) {
+        console.error("Sanitization error:", error);
+        alert("An error occurred while analyzing categories. Please check the data integrity.");
+    }
+  };
+
+  const confirmSanitization = () => {
+    if (!sanitizationProposal) return;
+    
+    if (sanitizationProposal.unusedCount > 0) {
+        const categoriesToRemove = sanitizationProposal.unusedCategories;
+        const newCategories = activeSession.categories.filter(c => !categoriesToRemove.includes(c));
+        updateActiveSessionCategories(newCategories);
+        
+        // Show success modal
+        setSanitizationResult({
+            count: categoriesToRemove.length,
+            categories: categoriesToRemove
+        });
+    }
+    
+    setSanitizationProposal(null);
+  };
+
   // Rule Handlers
   const handleAddOrUpdateRule = () => {
     if (!newRule.keyword.trim() || !newRule.category) return;
@@ -790,10 +844,20 @@ const App: React.FC = () => {
 
         {/* Categories */}
         <div className="border-t border-slate-700 pt-6">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <List size={24} className="text-indigo-400"/>
-                Categories
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <List size={24} className="text-indigo-400"/>
+                    Categories
+                </h2>
+                <button 
+                    onClick={handleSanitizeCategories}
+                    className="flex items-center space-x-2 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg transition-colors border border-slate-600"
+                    title="Remove categories that are not used by any transaction"
+                >
+                    <Eraser size={14} />
+                    <span>Clean Unused</span>
+                </button>
+            </div>
             <div className="flex gap-2 mb-4">
                 <input 
                     type="text" 
@@ -879,6 +943,110 @@ const App: React.FC = () => {
                             </div>
                         </>
                     )}
+                </div>
+            </div>
+        )}
+
+        {/* Sanitization Proposal Modal */}
+        {sanitizationProposal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                             <Eraser size={24} />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Clean Categories</h3>
+                            <p className="text-slate-400 text-sm">Analyze and remove unused tags</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700 mb-6 space-y-3">
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-400">Total Categories:</span>
+                            <span className="text-white font-mono font-bold">{sanitizationProposal.totalCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-400">Unused Categories:</span>
+                            <span className={`font-mono font-bold ${sanitizationProposal.unusedCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                {sanitizationProposal.unusedCount}
+                            </span>
+                        </div>
+                        
+                        {sanitizationProposal.unusedCount > 0 ? (
+                            <div className="mt-3 pt-3 border-t border-slate-700">
+                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">To be removed:</p>
+                                <div className="max-h-32 overflow-y-auto flex flex-wrap gap-2">
+                                    {sanitizationProposal.unusedCategories.map(c => (
+                                        <span key={c} className="text-xs bg-red-500/10 text-red-300 border border-red-500/20 px-2 py-1 rounded">
+                                            {c}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-3 pt-3 border-t border-slate-700 text-center">
+                                <p className="text-emerald-400 text-sm flex items-center justify-center gap-2">
+                                    <CheckCircle size={14} />
+                                    All categories are in use!
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setSanitizationProposal(null)}
+                            className="flex-1 px-4 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors text-sm font-medium border border-transparent hover:border-slate-600"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={confirmSanitization}
+                            disabled={sanitizationProposal.unusedCount === 0}
+                            className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium shadow-lg shadow-red-500/20 transition-all text-sm flex items-center justify-center gap-2"
+                        >
+                            {sanitizationProposal.unusedCount > 0 ? (
+                                <>
+                                    <Trash2 size={16} />
+                                    Confirm Delete
+                                </>
+                            ) : (
+                                <span>Close</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Sanitization Result Modal */}
+        {sanitizationResult && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+                    <div className="mx-auto bg-emerald-500/20 p-3 rounded-full w-16 h-16 flex items-center justify-center text-emerald-400 mb-4 animate-scale-in">
+                        <CheckCircle size={32} />
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-2">Categories Cleaned!</h3>
+                    <p className="text-slate-400 text-sm mb-4">
+                        Removed <strong className="text-white">{sanitizationResult.count}</strong> unused categories.
+                    </p>
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 mb-6 max-h-40 overflow-y-auto text-xs text-slate-300 text-left">
+                        <p className="font-semibold text-slate-500 uppercase text-[10px] mb-2 tracking-wider">Removed Items:</p>
+                        <div className="flex flex-wrap gap-2">
+                            {sanitizationResult.categories.map(c => (
+                                <span key={c} className="bg-slate-800 px-2 py-1 rounded border border-slate-600">
+                                    {c}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setSanitizationResult(null)}
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-2 rounded-lg transition-colors border border-slate-600"
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         )}
