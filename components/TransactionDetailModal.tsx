@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, CategorizationRule, TransactionType } from '../types';
-import { X, Save, AlertCircle, ArrowRight, Wallet, Tag, BookOpen, Calculator, Calendar, AlignLeft } from 'lucide-react';
+import { X, Save, AlertCircle, ArrowRight, Wallet, Tag, BookOpen, Calculator, Calendar, AlignLeft, Regex } from 'lucide-react';
 
 interface TransactionDetailModalProps {
   transaction: Transaction;
@@ -13,7 +13,7 @@ interface TransactionDetailModalProps {
     transactionId: string, 
     newCategory: string, 
     applyToSimilar: boolean, 
-    newRule: { keyword: string, category: string } | null
+    newRule: { keyword: string, category: string, isRegex: boolean } | null
   ) => void;
 }
 
@@ -32,14 +32,17 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   // Rule State
   const [createRule, setCreateRule] = useState(!!activeRule);
   const [ruleKeyword, setRuleKeyword] = useState(activeRule ? activeRule.keyword : transaction.description.toLowerCase());
+  const [ruleIsRegex, setRuleIsRegex] = useState(activeRule?.isRegex || false);
 
   useEffect(() => {
     setCategory(transaction.category);
     // Default keyword: try to find a meaningful word if no rule exists, otherwise full description
     if (!activeRule) {
         setRuleKeyword(transaction.description.toLowerCase());
+        setRuleIsRegex(false);
     } else {
         setRuleKeyword(activeRule.keyword);
+        setRuleIsRegex(!!activeRule.isRegex);
     }
   }, [transaction, activeRule]);
 
@@ -47,11 +50,20 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const totalCategoryAmount = categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
 
   const handleSave = () => {
+    if (createRule && ruleIsRegex) {
+        try {
+            new RegExp(ruleKeyword);
+        } catch(e) {
+            alert("Invalid Regex pattern");
+            return;
+        }
+    }
+
     onSave(
         transaction.id, 
         category, 
         applyToSimilar, 
-        createRule && ruleKeyword.trim() ? { keyword: ruleKeyword.trim(), category } : null
+        createRule && ruleKeyword.trim() ? { keyword: ruleKeyword.trim(), category, isRegex: ruleIsRegex } : null
     );
   };
 
@@ -160,13 +172,19 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                         
                         {createRule && (
                             <div className="animate-fade-in">
-                                <label className="block text-xs text-slate-500 mb-1">If description contains keyword:</label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-xs text-slate-500">Pattern:</label>
+                                    <div className="flex items-center gap-1 cursor-pointer" onClick={() => setRuleIsRegex(!ruleIsRegex)}>
+                                        <div className={`w-3 h-3 rounded-full border ${ruleIsRegex ? 'bg-indigo-500 border-indigo-400' : 'border-slate-500'}`}></div>
+                                        <span className={`text-xs ${ruleIsRegex ? 'text-indigo-400' : 'text-slate-500'}`}>Regex</span>
+                                    </div>
+                                </div>
                                 <input 
                                     type="text" 
                                     value={ruleKeyword}
                                     onChange={(e) => setRuleKeyword(e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 mb-2"
-                                    placeholder="e.g. uber"
+                                    className={`w-full bg-slate-900 border ${ruleIsRegex ? 'border-indigo-500/50 text-indigo-100 font-mono' : 'border-slate-600 text-white'} rounded px-3 py-2 text-sm focus:border-indigo-500 mb-2`}
+                                    placeholder={ruleIsRegex ? "^uber.*" : "e.g. uber"}
                                 />
                                 <p className="text-xs text-indigo-400">
                                     <ArrowRight size={12} className="inline mr-1"/>

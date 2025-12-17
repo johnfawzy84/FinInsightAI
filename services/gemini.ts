@@ -120,18 +120,34 @@ export const analyzeFinancesDeeply = async (
   transactions: Transaction[],
   userQuery: string
 ): Promise<string> => {
+  if (transactions.length === 0) return "No transaction data available for analysis.";
+
+  // Calculate metadata for grounding
+  const count = transactions.length;
+  // Assume sorted by AIConsultant, but safe to grab ends
+  const startDate = transactions[0].date;
+  const endDate = transactions[count - 1].date;
+
   const transactionSummary = transactions.map(t => 
     `${t.date}: ${t.description} - $${t.amount} (${t.type}, ${t.category})`
   ).join('\n');
 
   const prompt = `
     Analyze the following financial transaction data deeply.
+    
+    Context Metadata:
+    - Transaction Count: ${count}
+    - Data Time Range: ${startDate} to ${endDate}
+    - Today's Date: ${new Date().toISOString().split('T')[0]}
+    
     User Question: "${userQuery}"
     
     Data:
     ${transactionSummary}
     
-    Provide a comprehensive, reasoned answer. Identify patterns, anomalies, and actionable advice.
+    Provide a comprehensive, reasoned answer. 
+    IMPORTANT: Only use the provided data. If the user asks about a time period outside the 'Data Time Range', explain that you do not have that data.
+    Identify patterns, anomalies, and actionable advice.
   `;
 
   try {
@@ -141,8 +157,6 @@ export const analyzeFinancesDeeply = async (
       config: {
         // Thinking Budget setup for deep reasoning
         thinkingConfig: { thinkingBudget: 32768 },
-        // DO NOT set maxOutputTokens when using thinkingBudget logic for this specific requirement unless calculating the offset, 
-        // but the instruction said "Do not set maxOutputTokens".
       }
     });
 
@@ -159,32 +173,60 @@ export const analyzeFinancesDeeply = async (
 export const chatWithFinanceAssistant = async (
   history: { role: 'user' | 'model'; content: string }[],
   currentMessage: string,
-  contextData: string
+  transactions: Transaction[]
 ): Promise<string> => {
     
-  const systemInstruction = `You are a helpful financial assistant. You have access to the user's transaction data: ${contextData}. Keep answers concise unless asked for detail.`;
+  // Data Grounding
+  const count = transactions.length;
+  if (count === 0) return "I don't have any transaction data to analyze yet.";
+
+  // Calculate stats to guide the model
+  const startDate = transactions[0].date;
+  const endDate = transactions[count - 1].date;
+
+  // Compress data slightly to save tokens while keeping readability
+  const dataStr = JSON.stringify(transactions.map(t => ({
+      d: t.date,
+      desc: t.description,
+      amt: t.amount,
+      cat: t.category,
+      type: t.type
+  })));
+
+  const systemInstruction = `
+    You are a helpful financial assistant. 
+    You have access to the user's transaction data.
+    
+    DATA METADATA:
+    - Total Transactions: ${count}
+    - Date Range Available: ${startDate} to ${endDate}
+    - Today's Date: ${new Date().toISOString().split('T')[0]}
+
+    INSTRUCTIONS:
+    1. Base your answers ONLY on the provided JSON data.
+    2. If the user asks about a month or year that is NOT in the "Date Range Available", explicitly state that you have no data for that period. Do not make up numbers.
+    3. Keep answers concise unless asked for detail.
+    
+    TRANSACTION DATA (JSON):
+    ${dataStr}
+  `;
 
   try {
-    const chat = ai.chats.create({
-        model: 'gemini-2.5-flash',
-        config: { systemInstruction }
-    });
-    
-    // Load history (skipping for simplicity in this implementation pattern, usually we'd add history to the chat object)
-    // For this stateless call wrapper:
+    // Note: We use generateContent with history injected manually for a stateless-like wrapper
+    // ideally utilize chats.create for multi-turn if persistent context is needed, 
+    // but here we rebuild context every time to ensure data freshness.
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
-            { role: 'user', parts: [{ text: `Context Data: ${contextData}` }] }, // Prime context
             ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
             { role: 'user', parts: [{ text: currentMessage }] }
         ],
         config: { systemInstruction }
     });
 
-    return response.text || "";
+    return response.text || "I couldn't generate a response.";
   } catch (error) {
     console.error("Chat error:", error);
-    return "I'm having trouble connecting right now.";
+    return "I'm having trouble connecting to the AI service right now.";
   }
 };

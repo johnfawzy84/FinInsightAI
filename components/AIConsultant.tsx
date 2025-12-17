@@ -42,14 +42,21 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions }) => {
     try {
       let responseText = "";
 
+      // Ensure data is sorted chronologically for the AI context
+      const sortedTransactions = [...transactions].sort((a, b) => {
+         // robust comparison handling string dates
+         return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+
       if (useThinkingModel) {
-        // Use Gemini 3 Pro with Thinking
-        responseText = await analyzeFinancesDeeply(transactions, userMessage.content);
+        // Use Gemini 3 Pro with Thinking (Pass all sorted data)
+        responseText = await analyzeFinancesDeeply(sortedTransactions, userMessage.content);
       } else {
         // Use standard chat (Flash)
-        const contextSummary = JSON.stringify(transactions.slice(-50)); // Limit context for chat to recent
+        // We pass the full sorted list now, as Gemini 2.5 Flash has a large context window.
+        // Previously slicing (-50) caused hallucinations for yearly queries.
         const history = messages.map(m => ({ role: m.role, content: m.content }));
-        responseText = await chatWithFinanceAssistant(history, userMessage.content, contextSummary);
+        responseText = await chatWithFinanceAssistant(history, userMessage.content, sortedTransactions);
       }
 
       const modelMessage: Message = {

@@ -74,9 +74,12 @@ const App: React.FC = () => {
     );
     const inCategory = activeSession.transactions.filter(t => t.category === transaction.category);
     const sortedRules = [...activeSession.rules].sort((a, b) => b.keyword.length - a.keyword.length);
-    const activeRule = sortedRules.find(r => 
-        transaction.description.toLowerCase().includes(r.keyword.toLowerCase())
-    );
+    const activeRule = sortedRules.find(r => {
+        if (r.isRegex) {
+            try { return new RegExp(r.keyword, 'i').test(transaction.description); } catch(e) { return false; }
+        }
+        return transaction.description.toLowerCase().includes(r.keyword.toLowerCase());
+    });
 
     return { transaction, similar, inCategory, activeRule };
   }, [selectedTransactionId, activeSession]);
@@ -207,14 +210,16 @@ const App: React.FC = () => {
     setBulkUpdateProposal(null);
   };
 
-  const handleSaveDetails = (transactionId: string, newCategory: string, applyToSimilar: boolean, newRule: { keyword: string, category: string } | null) => {
+  const handleSaveDetails = (transactionId: string, newCategory: string, applyToSimilar: boolean, newRule: { keyword: string, category: string, isRegex: boolean } | null) => {
     let currentRules = [...activeSession.rules];
     if (newRule) {
+        // Remove existing rule if we are "overwriting" based on keyword
         currentRules = currentRules.filter(r => r.keyword !== newRule.keyword.toLowerCase());
         currentRules.push({
             id: `rule-${Date.now()}`,
-            keyword: newRule.keyword.toLowerCase(),
-            category: newRule.category
+            keyword: newRule.keyword,
+            category: newRule.category,
+            isRegex: newRule.isRegex
         });
         updateRules(() => currentRules);
     }
@@ -224,6 +229,7 @@ const App: React.FC = () => {
         updateTransactions(prev => {
             let nextTransactions = [...prev];
             if (newRule) {
+               // Re-apply all rules including the new one
                nextTransactions = applyRulesToTransactions(nextTransactions, currentRules);
             } else {
                 if (applyToSimilar) {
@@ -271,6 +277,7 @@ const App: React.FC = () => {
     const total = transactions.length;
     setRuleApplicationStatus({ active: true, progress: 0, total, updated: 0, finished: false });
 
+    // Sort rules, handling regex vs normal is tricky but length is a decent proxy for specificity in simple cases
     const sortedRules = rules.sort((a, b) => b.keyword.length - a.keyword.length);
     const BATCH_SIZE = 500;
     const newTransactions: Transaction[] = [];
@@ -281,7 +288,14 @@ const App: React.FC = () => {
         const end = Math.min(i + BATCH_SIZE, total);
         const chunk = transactions.slice(i, end);
         chunk.forEach(t => {
-            const matchingRule = sortedRules.find(r => t.description.toLowerCase().includes(r.keyword.toLowerCase()));
+            // Updated matching logic
+            const matchingRule = sortedRules.find(r => {
+                if (r.isRegex) {
+                     try { return new RegExp(r.keyword, 'i').test(t.description); } catch(e) { return false; }
+                }
+                return t.description.toLowerCase().includes(r.keyword.toLowerCase());
+            });
+
             if (matchingRule) {
                 if (t.category !== matchingRule.category) updatedCount++;
                 newTransactions.push({ ...t, category: matchingRule.category });

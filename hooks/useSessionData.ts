@@ -6,7 +6,19 @@ export const applyRulesToTransactions = (transactions: Transaction[], rules: Cat
   if (rules.length === 0) return transactions;
   const sortedRules = [...rules].sort((a, b) => b.keyword.length - a.keyword.length);
   return transactions.map(t => {
-    const matchingRule = sortedRules.find(r => t.description.toLowerCase().includes(r.keyword.toLowerCase()));
+    const matchingRule = sortedRules.find(r => {
+      if (r.isRegex) {
+        try {
+          // Use safe regex matching (case-insensitive by default)
+          const regex = new RegExp(r.keyword, 'i');
+          return regex.test(t.description);
+        } catch (e) {
+          console.warn(`Invalid regex rule: ${r.keyword}`);
+          return false;
+        }
+      }
+      return t.description.toLowerCase().includes(r.keyword.toLowerCase());
+    });
     return matchingRule ? { ...t, category: matchingRule.category } : t;
   });
 };

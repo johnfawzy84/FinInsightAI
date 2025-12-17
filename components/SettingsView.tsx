@@ -16,7 +16,8 @@ import {
   Eraser, 
   Plus, 
   Check, 
-  X 
+  X,
+  Regex
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -49,30 +50,42 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   // Local State
   const [editingCategory, setEditingCategory] = useState<{ oldName: string, newName: string } | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newRule, setNewRule] = useState<{ keyword: string, category: string }>({ keyword: '', category: '' });
+  const [newRule, setNewRule] = useState<{ keyword: string, category: string, isRegex: boolean }>({ keyword: '', category: '', isRegex: false });
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
 
   // Rule Handlers
   const handleAddOrUpdateRule = () => {
     if (!newRule.keyword.trim() || !newRule.category) return;
-    const cleanKeyword = newRule.keyword.trim().toLowerCase();
+    
+    // For regex, we keep original case usually, but let's standardise trimming.
+    // If not regex, we lowercase.
+    const cleanKeyword = newRule.isRegex ? newRule.keyword.trim() : newRule.keyword.trim().toLowerCase();
+
+    if (newRule.isRegex) {
+        try {
+            new RegExp(cleanKeyword);
+        } catch (e) {
+            alert("Invalid Regular Expression");
+            return;
+        }
+    }
 
     if (editingRuleId) {
-        onUpdateRules(prev => prev.map(r => r.id === editingRuleId ? { ...r, keyword: cleanKeyword, category: newRule.category } : r));
+        onUpdateRules(prev => prev.map(r => r.id === editingRuleId ? { ...r, keyword: cleanKeyword, category: newRule.category, isRegex: newRule.isRegex } : r));
         setEditingRuleId(null);
     } else {
-        onUpdateRules(prev => [...prev, { id: `rule-${Date.now()}`, keyword: cleanKeyword, category: newRule.category }]);
+        onUpdateRules(prev => [...prev, { id: `rule-${Date.now()}`, keyword: cleanKeyword, category: newRule.category, isRegex: newRule.isRegex }]);
     }
-    setNewRule({ keyword: '', category: '' });
+    setNewRule({ keyword: '', category: '', isRegex: false });
   };
 
   const startEditingRule = (rule: CategorizationRule) => {
-    setNewRule({ keyword: rule.keyword, category: rule.category });
+    setNewRule({ keyword: rule.keyword, category: rule.category, isRegex: !!rule.isRegex });
     setEditingRuleId(rule.id);
   };
 
   const cancelEditRule = () => {
-    setNewRule({ keyword: '', category: '' });
+    setNewRule({ keyword: '', category: '', isRegex: false });
     setEditingRuleId(null);
   };
 
@@ -220,38 +233,49 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             <p className="text-slate-400 mb-4 text-sm">Rules are applied automatically when importing files.</p>
 
             {/* Add / Edit Rule */}
-            <div className={`flex gap-2 mb-4 p-3 rounded-lg border transition-colors ${editingRuleId ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-800/50 border-slate-700'}`}>
-                <input 
-                    type="text" 
-                    placeholder="If description contains..." 
-                    value={newRule.keyword}
-                    onChange={(e) => setNewRule({ ...newRule, keyword: e.target.value })}
-                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddOrUpdateRule()}
-                />
-                <select
-                    value={newRule.category}
-                    onChange={(e) => setNewRule({ ...newRule, category: e.target.value })}
-                    className="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                >
-                    <option value="">Select Category</option>
-                    {activeSession.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <button 
-                    onClick={handleAddOrUpdateRule} 
-                    className={`${editingRuleId ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white px-4 rounded text-sm font-medium transition-colors`}
-                >
-                    {editingRuleId ? 'Update' : 'Add'}
-                </button>
-                {editingRuleId && (
+            <div className={`flex flex-col sm:flex-row gap-2 mb-4 p-3 rounded-lg border transition-colors ${editingRuleId ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-800/50 border-slate-700'}`}>
+                <div className="flex-1 flex gap-2">
                     <button 
-                        onClick={cancelEditRule} 
-                        className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 rounded text-sm transition-colors"
-                        title="Cancel Edit"
+                        onClick={() => setNewRule(prev => ({ ...prev, isRegex: !prev.isRegex }))}
+                        className={`px-2 py-2 rounded border transition-colors ${newRule.isRegex ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-slate-900 border-slate-600 text-slate-500'}`}
+                        title="Toggle Regex Mode"
                     >
-                        <RotateCcw size={16} />
+                        <Regex size={16} />
                     </button>
-                )}
+                    <input 
+                        type="text" 
+                        placeholder={newRule.isRegex ? "Regex pattern (e.g. ^uber.*)" : "If description contains..."}
+                        value={newRule.keyword}
+                        onChange={(e) => setNewRule({ ...newRule, keyword: e.target.value })}
+                        className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none font-mono"
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddOrUpdateRule()}
+                    />
+                </div>
+                <div className="flex gap-2">
+                    <select
+                        value={newRule.category}
+                        onChange={(e) => setNewRule({ ...newRule, category: e.target.value })}
+                        className="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none flex-1 sm:flex-none"
+                    >
+                        <option value="">Select Category</option>
+                        {activeSession.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <button 
+                        onClick={handleAddOrUpdateRule} 
+                        className={`${editingRuleId ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white px-4 rounded text-sm font-medium transition-colors`}
+                    >
+                        {editingRuleId ? 'Update' : 'Add'}
+                    </button>
+                    {editingRuleId && (
+                        <button 
+                            onClick={cancelEditRule} 
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 rounded text-sm transition-colors"
+                            title="Cancel Edit"
+                        >
+                            <RotateCcw size={16} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Rules List */}
@@ -262,7 +286,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     activeSession.rules.map(rule => (
                         <div key={rule.id} className={`flex justify-between items-center bg-slate-800 px-4 py-2 rounded border text-sm transition-colors ${editingRuleId === rule.id ? 'border-indigo-500 ring-1 ring-indigo-500/50' : 'border-slate-700'}`}>
                             <div className="flex items-center gap-2 overflow-hidden">
-                                <span className="text-slate-400 whitespace-nowrap">If contains</span>
+                                <span className="text-slate-400 whitespace-nowrap flex items-center gap-1">
+                                    {rule.isRegex ? <Regex size={14} className="text-purple-400"/> : 'If contains'}
+                                </span>
                                 <span className="text-white font-mono bg-slate-900 px-1 rounded truncate max-w-[150px]" title={rule.keyword}>"{rule.keyword}"</span>
                                 <span className="text-slate-400 whitespace-nowrap">set to</span>
                                 <span className="text-indigo-400 font-medium truncate max-w-[150px]" title={rule.category}>{rule.category}</span>
