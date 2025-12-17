@@ -1,0 +1,5 @@
+{
+  "name": "FinSight AI",
+  "description": "A smart personal finance dashboard that imports transaction data, auto-categorizes spending using AI, and provides deep financial analysis with Gemini reasoning capabilities.",
+  "requestFramePermissions": []
+}
