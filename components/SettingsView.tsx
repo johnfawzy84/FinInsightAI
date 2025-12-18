@@ -336,7 +336,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text" 
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="New Category..."
+                    placeholder="New Category (e.g. Utilities.Water)..."
                     className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-slate-200 focus:border-indigo-500 focus:outline-none"
                     onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
                 />

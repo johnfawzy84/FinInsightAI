@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { Transaction, TransactionType } from '../types';
-import { PieChart as PieIcon, TrendingUp, DollarSign, Repeat, ArrowRight } from 'lucide-react';
+import { PieChart as PieIcon, TrendingUp, DollarSign, Repeat, ArrowRight, Layers, Tag } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -10,6 +10,8 @@ interface DashboardProps {
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
+  const [viewMode, setViewMode] = useState<'main' | 'sub'>('main');
+
   const summary = useMemo(() => {
     const totalIncome = transactions
       .filter(t => t.type === TransactionType.INCOME)
@@ -30,14 +32,20 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
     const catMap = new Map<string, number>();
 
     expenses.forEach(t => {
-      const current = catMap.get(t.category) || 0;
-      catMap.set(t.category, current + t.amount);
+      let key = t.category;
+      if (viewMode === 'main') {
+          // Group by Main Category (e.g. "Utilities.Water" -> "Utilities")
+          // If no dot, it stays as is.
+          key = t.category.split('.')[0].trim();
+      }
+      const current = catMap.get(key) || 0;
+      catMap.set(key, current + t.amount);
     });
 
     return Array.from(catMap.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [transactions]);
+  }, [transactions, viewMode]);
 
   const recentTrends = useMemo(() => {
       const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -111,7 +119,28 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Spending by Category */}
         <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[400px]">
-          <h3 className="text-xl font-semibold text-white mb-6">Spending by Category</h3>
+          <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-white">Spending by Category</h3>
+              <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-600">
+                  <button
+                      onClick={() => setViewMode('main')}
+                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'main' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                      title="Group by Main Category (e.g. Utilities)"
+                  >
+                      <Layers size={14} />
+                      <span>Main</span>
+                  </button>
+                  <button
+                      onClick={() => setViewMode('sub')}
+                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'sub' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                      title="Show Sub Categories (e.g. Utilities.Water)"
+                  >
+                      <Tag size={14} />
+                      <span>Sub</span>
+                  </button>
+              </div>
+          </div>
+
           {categoryData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
