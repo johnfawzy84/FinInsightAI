@@ -10,7 +10,7 @@ import {
 import { Transaction, TransactionType, Asset, Session, DashboardWidget } from '../types';
 import { AssetManagerModal } from './AssetManagerModal';
 import { generateDynamicChart } from '../services/gemini';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save, Check, X } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -138,8 +138,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
   const [isGeneratingChart, setIsGeneratingChart] = useState(false);
   const [customChartConfig, setCustomChartConfig] = useState<any>(null);
 
-  // Custom Widget Refresh State
+  // Custom Widget State (Refresh & Edit)
   const [refreshingWidgetId, setRefreshingWidgetId] = useState<string | null>(null);
+  const [editingWidgetId, setEditingWidgetId] = useState<string | null>(null);
+  const [editWidgetQuery, setEditWidgetQuery] = useState('');
 
   // Auto-fit Date Range on Data Load
   useEffect(() => {
@@ -219,6 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       alert("Chart added to Dashboard!");
   };
 
+  // --- Custom Widget Management ---
   const refreshCustomWidget = async (widget: DashboardWidget) => {
       if (!widget.query) return;
       setRefreshingWidgetId(widget.id);
@@ -230,6 +233,39 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       } finally {
           setRefreshingWidgetId(null);
       }
+  };
+
+  const startEditingWidget = (widget: DashboardWidget) => {
+    setEditingWidgetId(widget.id);
+    setEditWidgetQuery(widget.query || '');
+  };
+
+  const cancelEditingWidget = () => {
+    setEditingWidgetId(null);
+    setEditWidgetQuery('');
+  };
+
+  const saveEditingWidget = async (widgetId: string) => {
+    if (!editWidgetQuery.trim()) return;
+    
+    setEditingWidgetId(null);
+    setRefreshingWidgetId(widgetId); // Use refreshing state to show loading
+    
+    try {
+        const config = await generateDynamicChart(transactions, editWidgetQuery);
+        onUpdateDashboardWidgets(prev => prev.map(w => w.id === widgetId ? { 
+            ...w, 
+            query: editWidgetQuery, 
+            description: editWidgetQuery,
+            cachedConfig: config,
+            title: config.title || w.title 
+        } : w));
+    } catch (e) {
+        console.error(e);
+        alert("Failed to update chart prompt.");
+    } finally {
+        setRefreshingWidgetId(null);
+    }
   };
 
 
@@ -498,19 +534,53 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
             case 'custom':
                 return (
                     <div className="flex flex-col h-full">
-                         <div className="mb-4 flex justify-between items-center">
-                            <div>
-                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Sparkles className="text-indigo-400" size={20}/> {widget.title}</h3>
-                                {widget.description && <p className="text-xs text-slate-500 truncate max-w-xs" title={widget.description}>{widget.description}</p>}
-                            </div>
-                            <button 
-                                onClick={() => refreshCustomWidget(widget)} 
-                                disabled={refreshingWidgetId === widget.id}
-                                className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                                title="Refresh data"
-                            >
-                                {refreshingWidgetId === widget.id ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}
-                            </button>
+                         <div className="mb-4 flex justify-between items-center gap-2 min-h-[40px]">
+                            {editingWidgetId === widget.id ? (
+                                <>
+                                    <div className="flex-1">
+                                        <input 
+                                            autoFocus
+                                            type="text" 
+                                            value={editWidgetQuery}
+                                            onChange={(e) => setEditWidgetQuery(e.target.value)}
+                                            className="w-full bg-slate-900 border border-indigo-500 rounded px-2 py-1.5 text-sm text-white focus:outline-none"
+                                            placeholder="Update prompt..."
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') saveEditingWidget(widget.id);
+                                                if (e.key === 'Escape') cancelEditingWidget();
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => saveEditingWidget(widget.id)} className="p-1.5 text-emerald-400 hover:bg-slate-700 rounded"><Check size={16}/></button>
+                                        <button onClick={cancelEditingWidget} className="p-1.5 text-slate-400 hover:bg-slate-700 rounded"><X size={16}/></button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex-1 overflow-hidden">
+                                        <h3 className="text-xl font-bold text-white flex items-center gap-2"><Sparkles className="text-indigo-400" size={20}/> {widget.title}</h3>
+                                        {widget.description && <p className="text-xs text-slate-500 truncate" title={widget.description}>{widget.description}</p>}
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button 
+                                            onClick={() => startEditingWidget(widget)}
+                                            className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-slate-700 rounded transition-colors"
+                                            title="Edit Prompt"
+                                        >
+                                            <Edit2 size={16}/>
+                                        </button>
+                                        <button 
+                                            onClick={() => refreshCustomWidget(widget)} 
+                                            disabled={refreshingWidgetId === widget.id}
+                                            className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                                            title="Refresh data"
+                                        >
+                                            {refreshingWidgetId === widget.id ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div className="flex-1 min-h-[250px]">
                             <ResponsiveContainer width="100%" height="100%">
