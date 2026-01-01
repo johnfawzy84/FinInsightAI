@@ -7,15 +7,17 @@ import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend,
   Sector, LineChart, Line
 } from 'recharts';
-import { Transaction, TransactionType, Asset } from '../types';
+import { Transaction, TransactionType, Asset, Session, DashboardWidget } from '../types';
 import { AssetManagerModal } from './AssetManagerModal';
 import { generateDynamicChart } from '../services/gemini';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
   assets: Asset[];
   onUpdateAssets: (updater: (assets: Asset[]) => Asset[]) => void;
+  activeSession: Session;
+  onUpdateDashboardWidgets: (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => void;
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -36,227 +38,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets }) => {
-  // Date State
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 6);
-    return d.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
-  
-  // UI State
-  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
-
-  // Dynamic Chart State
-  const [customQuery, setCustomQuery] = useState('');
-  const [isGeneratingChart, setIsGeneratingChart] = useState(false);
-  const [customChartConfig, setCustomChartConfig] = useState<any>(null);
-
-  // Auto-fit Date Range on Data Load
-  useEffect(() => {
-    if (transactions.length > 0) {
-      const dates = transactions.map(t => t.date).sort();
-      const minData = dates[0];
-      const maxData = dates[dates.length - 1];
-      
-      const today = new Date().toISOString().split('T')[0];
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
-
-      // If the most recent transaction is older than 6 months, or future dated beyond today
-      // we shift the view to cover the transaction history.
-      if (maxData < sixMonthsAgoStr || minData > today) {
-         setStartDate(minData);
-         setEndDate(maxData);
-      }
-    }
-  }, [transactions.length]); // Dependency on length change (import)
-
-  // Quick Select Handler
-  const setQuickRange = (months: number | 'YTD' | 'ALL') => {
-    const end = new Date();
-    let start = new Date();
-    
-    if (months === 'ALL') {
-        // Find earliest transaction
-        if (transactions.length > 0) {
-            const earliest = transactions.reduce((a, b) => a.date < b.date ? a : b);
-            start = new Date(earliest.date);
-        } else {
-            start.setFullYear(end.getFullYear() - 1);
-        }
-    } else if (months === 'YTD') {
-        start = new Date(end.getFullYear(), 0, 1);
-    } else {
-        start.setMonth(end.getMonth() - months);
-    }
-    
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(end.toISOString().split('T')[0]);
-  };
-
-  // --- Filter Data by Date Range ---
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => t.date >= startDate && t.date <= endDate);
-  }, [transactions, startDate, endDate]);
-
-  // --- AI Chart Generator ---
-  const handleGenerateCustomChart = async () => {
-    if (!customQuery.trim()) return;
-    setIsGeneratingChart(true);
-    setCustomChartConfig(null);
-    try {
-        const config = await generateDynamicChart(transactions, customQuery);
-        setCustomChartConfig(config);
-    } catch (e) {
-        console.error(e);
-        alert("Failed to generate chart. Please try again.");
-    } finally {
-        setIsGeneratingChart(false);
-    }
-  };
-
-  // --- 1. Net Worth Trend (Back-calculation) ---
-  const netWorthData = useMemo(() => {
-    const currentWealth = assets.reduce((sum, a) => sum + a.value, 0);
-    
-    // Sort all transactions desc
-    const allSorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Create map for O(1) lookups
-    const txByDate = new Map<string, { income: number, expense: number }>();
-    allSorted.forEach(t => {
-        const curr = txByDate.get(t.date) || { income: 0, expense: 0 };
-        if (t.type === TransactionType.INCOME) curr.income += t.amount;
-        else curr.expense += t.amount;
-        txByDate.set(t.date, curr);
-    });
-
-    const dataPoints: { date: string, value: number }[] = [];
-    let cursorWealth = currentWealth;
-    
-    // Safe UTC Loop
-    const endUTC = new Date(endDate);
-    const startUTC = new Date(startDate);
-    
-    // Ensure we start loop from at least Today if 'endDate' is in future, 
-    // unless 'endDate' is specifically chosen. 
-    // Actually, we should just walk back from max(Today, endDate).
-    // But to match the XAxis of the chart which respects 'endDate', we start there.
-    // However, if endDate is in the future, we assume no transactions happen in future, 
-    // so wealth remains constant from Today -> Future.
-    
-    // We iterate backwards from End Date to Start Date
-    for (let d = new Date(endUTC); d >= startUTC; d.setUTCDate(d.getUTCDate() - 1)) {
-        const dateStr = d.toISOString().split('T')[0];
-        
-        dataPoints.push({ date: dateStr, value: cursorWealth });
-        
-        // Adjust cursor for previous day (which is next in iteration but prev in time)
-        // Wealth(Yesterday) = Wealth(Today) - Income(Today) + Expense(Today)
-        const flow = txByDate.get(dateStr) || { income: 0, expense: 0 };
-        cursorWealth = cursorWealth - flow.income + flow.expense;
+// Generic Chart Renderer
+const GenericChartRenderer = ({ config }: { config: any }) => {
+    if (!config || config.chartType === 'error') {
+        return <div className="flex items-center justify-center h-full text-red-400 text-sm">{config?.title || "Error loading chart"}</div>
     }
 
-    return dataPoints.reverse();
-  }, [transactions, assets, startDate, endDate]);
-
-
-  // --- 2. Cash Flow (Monthly Bar Chart) ---
-  const cashFlowData = useMemo(() => {
-    const grouped = new Map<string, { income: number; expense: number }>();
-    
-    filteredTransactions.forEach(t => {
-      // Format YYYY-MM
-      const date = new Date(t.date);
-      // Use UTC methods to avoid off-by-one month if date is 1st of month
-      const year = date.getUTCFullYear();
-      const month = date.getUTCMonth() + 1;
-      const key = `${year}-${String(month).padStart(2, '0')}`;
-      
-      const current = grouped.get(key) || { income: 0, expense: 0 };
-      if (t.type === TransactionType.INCOME) current.income += t.amount;
-      else current.expense += t.amount;
-      grouped.set(key, current);
-    });
-
-    return Array.from(grouped.entries())
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [filteredTransactions]);
-
-  // --- 3. Spending Breakdown (Donut) ---
-  const spendingData = useMemo(() => {
-    const expenses = filteredTransactions.filter(t => t.type === TransactionType.EXPENSE);
-    const grouped = new Map<string, number>();
-    
-    expenses.forEach(t => {
-      const current = grouped.get(t.category) || 0;
-      grouped.set(t.category, current + t.amount);
-    });
-
-    return Array.from(grouped.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredTransactions]);
-
-  const totalSpent = spendingData.reduce((acc, curr) => acc + curr.value, 0);
-
-  // --- 4. Sankey Data ---
-  const sankeyData = useMemo(() => {
-    // Nodes: 0 = Income, 1 = Surplus (if any), 2..N = Categories
-    const incomeTotal = filteredTransactions
-        .filter(t => t.type === TransactionType.INCOME)
-        .reduce((sum, t) => sum + t.amount, 0);
-    
-    // Get top expense categories
-    const expenseCats = spendingData.slice(0, 6); // Limit to top 6 to keep sankey clean
-    const otherExpense = spendingData.slice(6).reduce((sum, t) => sum + t.value, 0);
-    
-    const totalExpense = totalSpent;
-    const surplus = Math.max(0, incomeTotal - totalExpense);
-
-    const nodes = [
-      { name: 'Income' },
-      ...expenseCats.map(c => ({ name: c.name })),
-    ];
-    
-    if (otherExpense > 0) nodes.push({ name: 'Other' });
-    if (surplus > 0) nodes.push({ name: 'Savings' });
-
-    const links = [];
-    
-    // Link Income to Categories
-    expenseCats.forEach((cat, idx) => {
-      links.push({ source: 0, target: idx + 1, value: cat.value });
-    });
-
-    if (otherExpense > 0) {
-        links.push({ source: 0, target: expenseCats.length + 1, value: otherExpense });
-    }
-
-    if (surplus > 0) {
-        links.push({ source: 0, target: nodes.length - 1, value: surplus });
-    }
-
-    // Safety: If total expenses > total income, Recharts sankey can glitch. 
-    if (incomeTotal === 0 && totalExpense > 0) {
-       nodes[0].name = "Capital";
-    }
-
-    return { nodes, links };
-  }, [filteredTransactions, spendingData, totalSpent]);
-
-  // --- Dynamic Chart Rendering Helper ---
-  const renderDynamicChart = () => {
-    if (!customChartConfig) return null;
-    if (customChartConfig.chartType === 'error') {
-        return <div className="flex items-center justify-center h-[250px] text-red-400 text-sm">{customChartConfig.title}</div>
-    }
-
-    const { chartType, data, xAxisKey, series } = customChartConfig;
+    const { chartType, data, xAxisKey, series } = config;
 
     switch (chartType) {
         case 'bar':
@@ -311,7 +99,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                  <PieChart>
                      <Pie
                         data={data}
-                        dataKey={series[0].dataKey} // Pie usually has 1 value key
+                        dataKey={series[0].dataKey} 
                         nameKey={xAxisKey}
                         cx="50%"
                         cy="50%"
@@ -330,6 +118,410 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
         default:
             return null;
     }
+};
+
+
+const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets, activeSession, onUpdateDashboardWidgets }) => {
+  // Date State
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  
+  // UI State
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+
+  // Dynamic Chart State (Playground)
+  const [customQuery, setCustomQuery] = useState('');
+  const [isGeneratingChart, setIsGeneratingChart] = useState(false);
+  const [customChartConfig, setCustomChartConfig] = useState<any>(null);
+
+  // Custom Widget Refresh State
+  const [refreshingWidgetId, setRefreshingWidgetId] = useState<string | null>(null);
+
+  // Auto-fit Date Range on Data Load
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const dates = transactions.map(t => t.date).sort();
+      const minData = dates[0];
+      const maxData = dates[dates.length - 1];
+      
+      const today = new Date().toISOString().split('T')[0];
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
+
+      if (maxData < sixMonthsAgoStr || minData > today) {
+         setStartDate(minData);
+         setEndDate(maxData);
+      }
+    }
+  }, [transactions.length]);
+
+  // Quick Select Handler
+  const setQuickRange = (months: number | 'YTD' | 'ALL') => {
+    const end = new Date();
+    let start = new Date();
+    if (months === 'ALL') {
+        if (transactions.length > 0) {
+            const earliest = transactions.reduce((a, b) => a.date < b.date ? a : b);
+            start = new Date(earliest.date);
+        } else {
+            start.setFullYear(end.getFullYear() - 1);
+        }
+    } else if (months === 'YTD') {
+        start = new Date(end.getFullYear(), 0, 1);
+    } else {
+        start.setMonth(end.getMonth() - months);
+    }
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+  };
+
+  // --- Filter Data by Date Range ---
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => t.date >= startDate && t.date <= endDate);
+  }, [transactions, startDate, endDate]);
+
+  // --- AI Chart Generator (Playground) ---
+  const handleGenerateCustomChart = async () => {
+    if (!customQuery.trim()) return;
+    setIsGeneratingChart(true);
+    setCustomChartConfig(null);
+    try {
+        const config = await generateDynamicChart(transactions, customQuery);
+        setCustomChartConfig(config);
+    } catch (e) {
+        console.error(e);
+        alert("Failed to generate chart. Please try again.");
+    } finally {
+        setIsGeneratingChart(false);
+    }
+  };
+
+  const handleSavePlaygroundChart = () => {
+      if(!customChartConfig) return;
+      const newWidget: DashboardWidget = {
+          id: `custom-${Date.now()}`,
+          type: 'custom',
+          title: customChartConfig.title,
+          description: customQuery,
+          query: customQuery,
+          cachedConfig: customChartConfig,
+          visible: true,
+          width: 'half'
+      };
+      onUpdateDashboardWidgets(prev => [...prev, newWidget]);
+      setCustomChartConfig(null);
+      setCustomQuery('');
+      alert("Chart added to Dashboard!");
+  };
+
+  const refreshCustomWidget = async (widget: DashboardWidget) => {
+      if (!widget.query) return;
+      setRefreshingWidgetId(widget.id);
+      try {
+          const config = await generateDynamicChart(transactions, widget.query);
+          onUpdateDashboardWidgets(prev => prev.map(w => w.id === widget.id ? { ...w, cachedConfig: config } : w));
+      } catch(e) {
+          console.error(e);
+      } finally {
+          setRefreshingWidgetId(null);
+      }
+  };
+
+
+  // --- 1. Net Worth Trend (Back-calculation) ---
+  const netWorthData = useMemo(() => {
+    const currentWealth = assets.reduce((sum, a) => sum + a.value, 0);
+    const allSorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const txByDate = new Map<string, { income: number, expense: number }>();
+    allSorted.forEach(t => {
+        const curr = txByDate.get(t.date) || { income: 0, expense: 0 };
+        if (t.type === TransactionType.INCOME) curr.income += t.amount;
+        else curr.expense += t.amount;
+        txByDate.set(t.date, curr);
+    });
+
+    const dataPoints: { date: string, value: number }[] = [];
+    let cursorWealth = currentWealth;
+    const endUTC = new Date(endDate);
+    const startUTC = new Date(startDate);
+    
+    for (let d = new Date(endUTC); d >= startUTC; d.setUTCDate(d.getUTCDate() - 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        dataPoints.push({ date: dateStr, value: cursorWealth });
+        const flow = txByDate.get(dateStr) || { income: 0, expense: 0 };
+        cursorWealth = cursorWealth - flow.income + flow.expense;
+    }
+    return dataPoints.reverse();
+  }, [transactions, assets, startDate, endDate]);
+
+  // --- 2. Cash Flow (Monthly Bar Chart) ---
+  const cashFlowData = useMemo(() => {
+    const grouped = new Map<string, { income: number; expense: number }>();
+    filteredTransactions.forEach(t => {
+      const date = new Date(t.date);
+      const year = date.getUTCFullYear();
+      const month = date.getUTCMonth() + 1;
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+      const current = grouped.get(key) || { income: 0, expense: 0 };
+      if (t.type === TransactionType.INCOME) current.income += t.amount;
+      else current.expense += t.amount;
+      grouped.set(key, current);
+    });
+    return Array.from(grouped.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredTransactions]);
+
+  // --- 3. Spending Breakdown (Donut) ---
+  const spendingData = useMemo(() => {
+    const expenses = filteredTransactions.filter(t => t.type === TransactionType.EXPENSE);
+    const grouped = new Map<string, number>();
+    expenses.forEach(t => {
+      const current = grouped.get(t.category) || 0;
+      grouped.set(t.category, current + t.amount);
+    });
+    return Array.from(grouped.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredTransactions]);
+
+  const totalSpent = spendingData.reduce((acc, curr) => acc + curr.value, 0);
+
+  // --- 4. Sankey Data ---
+  const sankeyData = useMemo(() => {
+    const incomeTotal = filteredTransactions
+        .filter(t => t.type === TransactionType.INCOME)
+        .reduce((sum, t) => sum + t.amount, 0);
+    const expenseCats = spendingData.slice(0, 6);
+    const otherExpense = spendingData.slice(6).reduce((sum, t) => sum + t.value, 0);
+    const totalExpense = totalSpent;
+    const surplus = Math.max(0, incomeTotal - totalExpense);
+    const nodes = [ { name: 'Income' }, ...expenseCats.map(c => ({ name: c.name })) ];
+    if (otherExpense > 0) nodes.push({ name: 'Other' });
+    if (surplus > 0) nodes.push({ name: 'Savings' });
+    const links = [];
+    expenseCats.forEach((cat, idx) => { links.push({ source: 0, target: idx + 1, value: cat.value }); });
+    if (otherExpense > 0) links.push({ source: 0, target: expenseCats.length + 1, value: otherExpense });
+    if (surplus > 0) links.push({ source: 0, target: nodes.length - 1, value: surplus });
+    if (incomeTotal === 0 && totalExpense > 0) nodes[0].name = "Capital";
+    return { nodes, links };
+  }, [filteredTransactions, spendingData, totalSpent]);
+
+  // --- RENDERERS FOR PREDEFINED CHARTS ---
+  const renderNetWorth = () => (
+      <ResponsiveContainer width="100%" height={250}>
+        <AreaChart data={netWorthData}>
+          <defs>
+            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+          <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(val) => { const d = new Date(val); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; }} minTickGap={40} />
+          <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
+          <RechartsTooltip content={<CustomTooltip />} />
+          <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+        </AreaChart>
+      </ResponsiveContainer>
+  );
+
+  const renderAssets = () => (
+      assets.length > 0 ? (
+        <div className="flex-1 flex items-center justify-center relative">
+            <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                    <Pie data={assets as any[]} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value">
+                        {assets.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.5)" />)}
+                    </Pie>
+                    <RechartsTooltip content={<CustomTooltip />} />
+                </PieChart>
+            </ResponsiveContainer>
+             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-xs text-slate-400">Total</span>
+                <span className="text-lg font-bold text-white">${assets.reduce((sum, a) => sum + a.value, 0).toLocaleString()}</span>
+            </div>
+        </div>
+    ) : (
+        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-3">
+            <p className="text-sm">No assets added.</p>
+            <button onClick={() => setIsAssetModalOpen(true)} className="text-xs text-indigo-400 underline">Add Assets</button>
+        </div>
+    )
+  );
+
+  const renderCashFlow = () => (
+    <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={cashFlowData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+            <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
+            <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `$${val}`} />
+            <RechartsTooltip content={<CustomTooltip />} />
+            <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+        </BarChart>
+     </ResponsiveContainer>
+  );
+
+  const renderSpending = () => (
+      spendingData.length > 0 ? (
+        <div className="flex-1 flex items-center gap-4">
+            <div className="w-1/2 h-[250px] relative">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie data={spendingData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                            {spendingData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />)}
+                        </Pie>
+                        <RechartsTooltip content={<CustomTooltip />} />
+                    </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-xs text-slate-400">Total Spent</span>
+                    <span className="text-lg font-bold text-white">${totalSpent.toLocaleString()}</span>
+                </div>
+            </div>
+            <div className="w-1/2 max-h-[250px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                {spendingData.map((entry, index) => (
+                    <div key={index} className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                            <span className="text-slate-300 truncate max-w-[100px]">{entry.name}</span>
+                        </div>
+                        <span className="font-mono text-slate-400">${entry.value.toLocaleString()}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+     ) : (
+        <div className="flex-1 flex items-center justify-center text-slate-500">No expense data.</div>
+     )
+  );
+
+  const renderSankey = () => (
+      sankeyData.links.length > 0 ? (
+        <ResponsiveContainer width="100%" height={350}>
+            <Sankey
+                data={sankeyData}
+                node={{ stroke: '#1e293b', strokeWidth: 0, fill: '#6366f1' }}
+                link={{ stroke: '#64748b' }}
+                nodePadding={50}
+                margin={{ left: 10, right: 10, top: 10, bottom: 10 }}
+            >
+                <RechartsTooltip content={<CustomTooltip />} />
+            </Sankey>
+        </ResponsiveContainer>
+     ) : (
+        <div className="h-[300px] flex items-center justify-center text-slate-500">Not enough data.</div>
+     )
+  );
+
+  // --- WIDGET MAP ---
+  const renderWidget = (widget: DashboardWidget) => {
+      switch(widget.type) {
+          case 'net-worth':
+              return (
+                <div className="flex flex-col h-full">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><TrendingUp className="text-emerald-400" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-slate-500">Wealth based on cash flow + assets</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-2xl font-bold text-white">${(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
+                            <p className="text-xs text-emerald-400">Current Estimate</p>
+                        </div>
+                    </div>
+                    {assets.length === 0 && (
+                        <div className="mb-4 bg-amber-500/10 border border-amber-500/30 p-2 rounded flex items-center gap-2 text-xs text-amber-300">
+                            <AlertCircle size={14} />
+                            <span>Wealth starts at $0. Add your assets.</span>
+                            <button onClick={() => setIsAssetModalOpen(true)} className="underline font-bold">Add Assets</button>
+                        </div>
+                    )}
+                    {renderNetWorth()}
+                </div>
+              );
+          case 'assets':
+              return (
+                  <div className="flex flex-col h-full">
+                    <div className="mb-4 flex justify-between items-start">
+                        <div>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><PieIcon className="text-purple-400" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-slate-500">Portfolio Distribution</p>
+                        </div>
+                        <button onClick={() => setIsAssetModalOpen(true)} className="p-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-400 rounded-lg transition-all" title="Manage Assets"><Edit2 size={16} /></button>
+                    </div>
+                    {renderAssets()}
+                  </div>
+              );
+          case 'cash-flow':
+               return (
+                  <div className="flex flex-col h-full">
+                     <div className="mb-6 flex justify-between items-end">
+                        <div>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-slate-500">Monthly Income vs Expenses</p>
+                        </div>
+                        <div className="flex gap-4 text-xs">
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded-sm"></div> Income</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-sm"></div> Expenses</div>
+                        </div>
+                     </div>
+                     {renderCashFlow()}
+                  </div>
+               );
+           case 'spending':
+               return (
+                   <div className="flex flex-col h-full">
+                        <div className="mb-4">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-slate-500">Distribution of expenses</p>
+                        </div>
+                        {renderSpending()}
+                   </div>
+               );
+            case 'sankey':
+                return (
+                    <div className="flex flex-col h-full">
+                        <div className="mb-6">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-slate-500">Flow from Income to Expenses</p>
+                        </div>
+                        {renderSankey()}
+                    </div>
+                );
+            case 'custom':
+                return (
+                    <div className="flex flex-col h-full">
+                         <div className="mb-4 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Sparkles className="text-indigo-400" size={20}/> {widget.title}</h3>
+                                {widget.description && <p className="text-xs text-slate-500 truncate max-w-xs" title={widget.description}>{widget.description}</p>}
+                            </div>
+                            <button 
+                                onClick={() => refreshCustomWidget(widget)} 
+                                disabled={refreshingWidgetId === widget.id}
+                                className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                                title="Refresh data"
+                            >
+                                {refreshingWidgetId === widget.id ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}
+                            </button>
+                        </div>
+                        <div className="flex-1 min-h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                {GenericChartRenderer({ config: widget.cachedConfig }) || <div>No data</div>}
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                );
+            default:
+                return <div>Unknown Widget</div>;
+      }
   };
 
 
@@ -345,7 +537,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
         />
       )}
 
-      {/* Dynamic AI Chart Designer */}
+      {/* Dynamic AI Chart Designer (Playground) */}
       <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-6 rounded-xl border border-indigo-500/30 shadow-lg relative overflow-hidden group">
          <div className="relative z-10">
              <div className="flex items-center gap-2 mb-4">
@@ -382,10 +574,15 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                  <div className="bg-slate-900/50 rounded-xl p-4 border border-indigo-500/20 animate-fade-in min-h-[300px]">
                      <div className="flex justify-between items-center mb-4">
                         <h4 className="font-semibold text-white">{customChartConfig.title}</h4>
-                        <button onClick={() => setCustomChartConfig(null)} className="text-slate-500 hover:text-white"><RefreshCw size={14}/></button>
+                        <div className="flex gap-2">
+                            <button onClick={handleSavePlaygroundChart} className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded transition-colors shadow">
+                                <Save size={14}/> Save to Dashboard
+                            </button>
+                            <button onClick={() => setCustomChartConfig(null)} className="text-slate-500 hover:text-white p-1"><RefreshCw size={14}/></button>
+                        </div>
                      </div>
                      <ResponsiveContainer width="100%" height={250}>
-                        {renderDynamicChart() || <div></div>}
+                        {GenericChartRenderer({ config: customChartConfig }) || <div></div>}
                      </ResponsiveContainer>
                  </div>
              )}
@@ -435,239 +632,18 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
         </div>
       </div>
 
-      {/* Row 1: Net Worth & Asset Allocation */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Net Worth Trend */}
-        <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[350px]">
-          <div className="flex items-center justify-between mb-6">
-             <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <TrendingUp className="text-emerald-400" size={20}/>
-                    Net Worth Trend
-                </h3>
-                <p className="text-xs text-slate-500">Wealth evolution based on cash flow + assets</p>
-             </div>
-             <div className="text-right">
-                <p className="text-2xl font-bold text-white">
-                    ${(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}
-                </p>
-                <p className="text-xs text-emerald-400">Current Estimate</p>
-             </div>
-          </div>
-          
-          {assets.length === 0 && (
-             <div className="mb-4 bg-amber-500/10 border border-amber-500/30 p-2 rounded flex items-center gap-2 text-xs text-amber-300">
-                <AlertCircle size={14} />
-                <span>Wealth starts at $0. Add your current assets (Bank, Stocks) for an accurate total.</span>
-                <button onClick={() => setIsAssetModalOpen(true)} className="underline font-bold">Add Assets</button>
-             </div>
-          )}
-
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={netWorthData}>
-              <defs>
-                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-              <XAxis 
-                dataKey="date" 
-                stroke="#64748b" 
-                fontSize={10} 
-                tickFormatter={(val) => {
-                    const d = new Date(val);
-                    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-                }}
-                minTickGap={40}
-              />
-              <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
-              <RechartsTooltip content={<CustomTooltip />} />
-              <Area 
-                type="monotone" 
-                dataKey="value" 
-                stroke="#10b981" 
-                strokeWidth={2}
-                fillOpacity={1} 
-                fill="url(#colorValue)" 
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Asset Allocation (Pie) */}
-        <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[350px] flex flex-col">
-            <div className="mb-4 flex justify-between items-start">
-                <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <PieIcon className="text-purple-400" size={20}/>
-                        Assets
-                    </h3>
-                    <p className="text-xs text-slate-500">Portfolio Distribution</p>
-                </div>
-                <button 
-                    onClick={() => setIsAssetModalOpen(true)}
-                    className="p-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-400 rounded-lg transition-all"
-                    title="Manage Assets"
-                >
-                    <Edit2 size={16} />
-                </button>
-            </div>
-            {assets.length > 0 ? (
-                <div className="flex-1 flex items-center justify-center relative">
-                    <ResponsiveContainer width="100%" height={250}>
-                        <PieChart>
-                            <Pie
-                                data={assets as any[]}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                dataKey="value"
-                            >
-                                {assets.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.5)" />
-                                ))}
-                            </Pie>
-                            <RechartsTooltip content={<CustomTooltip />} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-xs text-slate-400">Total</span>
-                        <span className="text-lg font-bold text-white">
-                            ${assets.reduce((sum, a) => sum + a.value, 0).toLocaleString()}
-                        </span>
-                    </div>
-                </div>
-            ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-3">
-                    <p className="text-sm">No assets added.</p>
-                    <button onClick={() => setIsAssetModalOpen(true)} className="text-xs text-indigo-400 underline">Add Assets</button>
-                </div>
-            )}
-        </div>
-      </div>
-
-      {/* Row 2: Cash Flow & Spending Donut */}
+      {/* Dynamic Widget Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Cash Flow Bars */}
-          <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg">
-             <div className="mb-6 flex justify-between items-end">
-                <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Activity className="text-indigo-400" size={20}/>
-                        Cash Flow
-                    </h3>
-                    <p className="text-xs text-slate-500">Monthly Income vs Expenses</p>
-                </div>
-                <div className="flex gap-4 text-xs">
-                    <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-emerald-500 rounded-sm"></div> Income
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-red-500 rounded-sm"></div> Expenses
-                    </div>
-                </div>
-             </div>
-             <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={cashFlowData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
-                    <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `$${val}`} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                    <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-             </ResponsiveContainer>
-          </div>
-
-          {/* Spending Donut */}
-          <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col">
-             <div className="mb-4">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Layers className="text-amber-400" size={20}/>
-                    Spending Categories
-                </h3>
-                <p className="text-xs text-slate-500">Distribution of expenses</p>
-             </div>
-             {spendingData.length > 0 ? (
-                <div className="flex-1 flex items-center gap-4">
-                    <div className="w-1/2 h-[250px] relative">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={spendingData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {spendingData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
-                                    ))}
-                                </Pie>
-                                <RechartsTooltip content={<CustomTooltip />} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                        {/* Center Text */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-xs text-slate-400">Total Spent</span>
-                            <span className="text-lg font-bold text-white">${totalSpent.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    
-                    {/* Custom Legend */}
-                    <div className="w-1/2 max-h-[250px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                        {spendingData.map((entry, index) => (
-                            <div key={index} className="flex justify-between items-center text-xs">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                                    <span className="text-slate-300 truncate max-w-[100px]">{entry.name}</span>
-                                </div>
-                                <span className="font-mono text-slate-400">${entry.value.toLocaleString()}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-             ) : (
-                <div className="flex-1 flex items-center justify-center text-slate-500">
-                    No expense data for this period.
-                </div>
-             )}
-          </div>
-      </div>
-
-      {/* Row 3: Sankey Diagram */}
-      <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[400px]">
-         <div className="mb-6">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Activity className="text-indigo-400" size={20}/>
-                Income to Expense Flow
-            </h3>
-            <p className="text-xs text-slate-500">Visualizing how your income distributes into expenses and savings</p>
-         </div>
-         {sankeyData.links.length > 0 ? (
-            <ResponsiveContainer width="100%" height={350}>
-                <Sankey
-                    data={sankeyData}
-                    node={{ stroke: '#1e293b', strokeWidth: 0, fill: '#6366f1' }}
-                    link={{ stroke: '#64748b' }}
-                    nodePadding={50}
-                    margin={{ left: 10, right: 10, top: 10, bottom: 10 }}
-                >
-                    <RechartsTooltip content={<CustomTooltip />} />
-                </Sankey>
-            </ResponsiveContainer>
-         ) : (
-            <div className="h-[300px] flex items-center justify-center text-slate-500">
-                Not enough data to generate flow diagram.
-            </div>
-         )}
+          {activeSession.dashboardWidgets
+            .filter(w => w.visible)
+            .map(widget => (
+              <div 
+                key={widget.id} 
+                className={`bg-surface p-6 rounded-xl border border-slate-700 shadow-lg ${widget.width === 'full' ? 'lg:col-span-2' : ''} min-h-[350px]`}
+              >
+                  {renderWidget(widget)}
+              </div>
+          ))}
       </div>
 
     </div>

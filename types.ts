@@ -73,6 +73,18 @@ export interface Asset {
   color: string;
 }
 
+export interface DashboardWidget {
+  id: string;
+  type: 'net-worth' | 'assets' | 'cash-flow' | 'spending' | 'sankey' | 'custom';
+  title: string;
+  description?: string; // For AI generation context
+  query?: string; // The prompt used to generate it
+  cachedConfig?: any; // The Recharts config and data
+  visible: boolean;
+  width: 'full' | 'half';
+  lastUpdated?: number;
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -80,6 +92,7 @@ export interface Session {
   categories: string[];
   rules: CategorizationRule[];
   assets: Asset[];
+  dashboardWidgets: DashboardWidget[];
   createdAt: number;
   importSettings: ImportSettings;
 }

@@ -31,6 +31,7 @@ const App: React.FC = () => {
     updateCategories,
     updateRules,
     updateAssets,
+    updateDashboardWidgets,
     updateSessionRaw
   } = useSessionData();
 
@@ -472,6 +473,8 @@ const App: React.FC = () => {
                     transactions={activeSession.transactions} 
                     assets={activeSession.assets || []}
                     onUpdateAssets={updateAssets}
+                    activeSession={activeSession}
+                    onUpdateDashboardWidgets={updateDashboardWidgets}
                 />
             )}
             {activeTab === 'transactions' && (
@@ -495,6 +498,8 @@ const App: React.FC = () => {
                     onGenerateRules={handleGenerateRules}
                     isGeneratingRules={isGeneratingRules}
                     onSanitizeCategories={handleSanitizeCategories}
+                    onUpdateDashboardWidgets={updateDashboardWidgets}
+                    transactions={activeSession.transactions}
                 />
             )}
         </main>

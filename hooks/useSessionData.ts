@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset } from '../types';
+import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget } from '../types';
 
 // Helper for synchronous rule application
 export const applyRulesToTransactions = (transactions: Transaction[], rules: CategorizationRule[]): Transaction[] => {
@@ -45,6 +45,14 @@ export const useSessionData = () => {
     { id: 'a3', name: 'Investment Portfolio', value: 15000, type: 'Stock', color: '#6366f1' },
   ];
 
+  const defaultWidgets: DashboardWidget[] = [
+    { id: 'w-networth', type: 'net-worth', title: 'Net Worth Trend', visible: true, width: 'full' },
+    { id: 'w-assets', type: 'assets', title: 'Assets', visible: true, width: 'half' },
+    { id: 'w-cashflow', type: 'cash-flow', title: 'Cash Flow', visible: true, width: 'half' },
+    { id: 'w-spending', type: 'spending', title: 'Spending Categories', visible: true, width: 'half' },
+    { id: 'w-sankey', type: 'sankey', title: 'Income to Expense Flow', visible: true, width: 'full' },
+  ];
+
   const [sessions, setSessions] = useState<Session[]>([
     {
       id: 'default-session',
@@ -53,6 +61,7 @@ export const useSessionData = () => {
       categories: [...DEFAULT_CATEGORIES],
       rules: [],
       assets: initialAssets,
+      dashboardWidgets: defaultWidgets,
       createdAt: Date.now(),
       importSettings: defaultSettings
     }
@@ -71,6 +80,7 @@ export const useSessionData = () => {
       categories: [...DEFAULT_CATEGORIES],
       rules: [],
       assets: [],
+      dashboardWidgets: [...defaultWidgets],
       createdAt: Date.now(),
       importSettings: { ...defaultSettings }
     };
@@ -92,6 +102,8 @@ export const useSessionData = () => {
         ...sessionData,
         id: `session-${Date.now()}`,
         name: sessionData.name ? `${sessionData.name} (Imported)` : 'Imported Session',
+        // Ensure widgets exist if importing older version
+        dashboardWidgets: sessionData.dashboardWidgets || [...defaultWidgets],
         createdAt: Date.now()
     };
     setSessions(prev => [...prev, newSession]);
@@ -128,6 +140,10 @@ export const useSessionData = () => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, assets: updater(s.assets || []) } : s));
   };
 
+  const updateDashboardWidgets = (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => {
+    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, dashboardWidgets: updater(s.dashboardWidgets || []) } : s));
+  };
+
   // Raw Session Updater (for complex batch operations involving multiple fields)
   const updateSessionRaw = (updater: (session: Session) => Session) => {
      setSessions(prev => prev.map(s => s.id === activeSessionId ? updater(s) : s));
@@ -146,6 +162,7 @@ export const useSessionData = () => {
     updateCategories,
     updateRules,
     updateAssets,
+    updateDashboardWidgets,
     updateSessionRaw
   };
 };

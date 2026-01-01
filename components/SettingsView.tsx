@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Session, CategorizationRule, ImportSettings } from '../types';
+import { Session, CategorizationRule, ImportSettings, Transaction, DashboardWidget } from '../types';
+import { generateDynamicChart } from '../services/gemini';
 import { 
   Settings, 
   FileJson, 
@@ -17,8 +18,15 @@ import {
   Plus, 
   Check, 
   X,
-  Regex
+  Regex,
+  Layout,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Loader2,
+  Save
 } from 'lucide-react';
+import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 
 interface SettingsViewProps {
   activeSession: Session;
@@ -32,7 +40,25 @@ interface SettingsViewProps {
   onGenerateRules: () => void;
   isGeneratingRules: boolean;
   onSanitizeCategories: () => void;
+  onUpdateDashboardWidgets: (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => void;
+  transactions: Transaction[];
 }
+
+// Reusable Chart Renderer (Simplified for Preview)
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+
+const renderPreviewChart = (config: any) => {
+    if (!config || config.chartType === 'error') return <div className="text-red-400 text-xs p-4 text-center">{config?.title || "Error"}</div>;
+    const { chartType, data, xAxisKey, series } = config;
+
+    switch (chartType) {
+        case 'bar': return <BarChart data={data}><XAxis dataKey={xAxisKey} hide/><YAxis hide/><Bar dataKey={series[0].dataKey} fill={series[0].color} /></BarChart>;
+        case 'line': return <LineChart data={data}><XAxis dataKey={xAxisKey} hide/><YAxis hide/><Line type="monotone" dataKey={series[0].dataKey} stroke={series[0].color} dot={false} /></LineChart>;
+        case 'area': return <AreaChart data={data}><XAxis dataKey={xAxisKey} hide/><YAxis hide/><Area type="monotone" dataKey={series[0].dataKey} fill={series[0].color} stroke={series[0].color} /></AreaChart>;
+        case 'pie': return <PieChart><Pie data={data} dataKey={series[0].dataKey} nameKey={xAxisKey} cx="50%" cy="50%" outerRadius={40}><Cell fill={COLORS[0]}/><Cell fill={COLORS[1]}/></Pie></PieChart>;
+        default: return null;
+    }
+};
 
 const SettingsView: React.FC<SettingsViewProps> = ({
   activeSession,
@@ -45,29 +71,72 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onApplyRulesToExisting,
   onGenerateRules,
   isGeneratingRules,
-  onSanitizeCategories
+  onSanitizeCategories,
+  onUpdateDashboardWidgets,
+  transactions
 }) => {
   // Local State
   const [editingCategory, setEditingCategory] = useState<{ oldName: string, newName: string } | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newRule, setNewRule] = useState<{ keyword: string, category: string, isRegex: boolean }>({ keyword: '', category: '', isRegex: false });
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  
+  // Dashboard Widget State
+  const [newWidgetQuery, setNewWidgetQuery] = useState('');
+  const [isGeneratingWidget, setIsGeneratingWidget] = useState(false);
+  const [previewWidgetConfig, setPreviewWidgetConfig] = useState<any>(null);
 
-  // Rule Handlers
+  // --- Widget Handlers ---
+  const toggleWidgetVisibility = (id: string) => {
+      onUpdateDashboardWidgets(prev => prev.map(w => w.id === id ? { ...w, visible: !w.visible } : w));
+  };
+
+  const deleteWidget = (id: string) => {
+      if(confirm("Delete this custom graph?")) {
+          onUpdateDashboardWidgets(prev => prev.filter(w => w.id !== id));
+      }
+  };
+
+  const handlePreviewWidget = async () => {
+      if(!newWidgetQuery.trim()) return;
+      setIsGeneratingWidget(true);
+      setPreviewWidgetConfig(null);
+      try {
+          const config = await generateDynamicChart(transactions, newWidgetQuery);
+          setPreviewWidgetConfig(config);
+      } catch(e) {
+          console.error(e);
+          alert("Failed to generate preview.");
+      } finally {
+          setIsGeneratingWidget(false);
+      }
+  };
+
+  const handleSaveWidget = () => {
+      if(!previewWidgetConfig) return;
+      const newWidget: DashboardWidget = {
+          id: `custom-${Date.now()}`,
+          type: 'custom',
+          title: previewWidgetConfig.title,
+          description: newWidgetQuery,
+          query: newWidgetQuery,
+          cachedConfig: previewWidgetConfig,
+          visible: true,
+          width: 'half' // Default to half width
+      };
+      onUpdateDashboardWidgets(prev => [...prev, newWidget]);
+      setPreviewWidgetConfig(null);
+      setNewWidgetQuery('');
+      alert("Graph added to Dashboard!");
+  };
+
+  // --- Rule Handlers ---
   const handleAddOrUpdateRule = () => {
     if (!newRule.keyword.trim() || !newRule.category) return;
-    
-    // For regex, we keep original case usually, but let's standardise trimming.
-    // If not regex, we lowercase.
     const cleanKeyword = newRule.isRegex ? newRule.keyword.trim() : newRule.keyword.trim().toLowerCase();
 
     if (newRule.isRegex) {
-        try {
-            new RegExp(cleanKeyword);
-        } catch (e) {
-            alert("Invalid Regular Expression");
-            return;
-        }
+        try { new RegExp(cleanKeyword); } catch (e) { alert("Invalid Regular Expression"); return; }
     }
 
     if (editingRuleId) {
@@ -97,19 +166,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   // Category Handlers
   const handleAddCategory = () => {
     if (!newCategoryName.trim()) return;
-    if (activeSession.categories.includes(newCategoryName.trim())) {
-      alert("Category already exists.");
-      return;
-    }
+    if (activeSession.categories.includes(newCategoryName.trim())) { alert("Category already exists."); return; }
     onUpdateCategories([...activeSession.categories, newCategoryName.trim()]);
     setNewCategoryName('');
   };
 
   const handleDeleteCategory = (categoryToDelete: string) => {
-    if (categoryToDelete === 'Uncategorized') {
-      alert("Cannot delete the default 'Uncategorized' category.");
-      return;
-    }
+    if (categoryToDelete === 'Uncategorized') { alert("Cannot delete the default 'Uncategorized' category."); return; }
     if (confirm(`Delete category '${categoryToDelete}'? Transactions will be 'Uncategorized'.`)) {
       const newCategories = activeSession.categories.filter(c => c !== categoryToDelete);
       onUpdateTransactions(prev => prev.map(t => t.category === categoryToDelete ? { ...t, category: 'Uncategorized' } : t));
@@ -121,9 +184,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const saveEditedCategory = () => {
     if (!editingCategory || !editingCategory.newName.trim()) return;
     if (editingCategory.newName !== editingCategory.oldName) {
-       if (activeSession.categories.includes(editingCategory.newName)) {
-         alert("Name exists."); return;
-       }
+       if (activeSession.categories.includes(editingCategory.newName)) { alert("Name exists."); return; }
        const newCategories = activeSession.categories.map(c => c === editingCategory.oldName ? editingCategory.newName : c);
        onUpdateCategories(newCategories, editingCategory.oldName, editingCategory.newName);
     }
@@ -176,6 +237,88 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
         </div>
 
+        {/* Dashboard Configuration */}
+        <div className="border-t border-slate-700 pt-6">
+            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Layout size={24} className="text-indigo-400"/>
+                Dashboard Configuration
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Manage Existing */}
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <h3 className="text-sm font-bold text-slate-300 mb-3 uppercase tracking-wider">Visible Graphs</h3>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                        {activeSession.dashboardWidgets?.map(widget => (
+                            <div key={widget.id} className="flex items-center justify-between bg-slate-800 p-2 rounded border border-slate-700">
+                                <span className={`text-sm ${widget.visible ? 'text-white' : 'text-slate-500 line-through'}`}>{widget.title}</span>
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => toggleWidgetVisibility(widget.id)}
+                                        className={`p-1.5 rounded transition-colors ${widget.visible ? 'text-indigo-400 hover:bg-slate-700' : 'text-slate-500 hover:text-slate-300'}`}
+                                        title={widget.visible ? "Hide" : "Show"}
+                                    >
+                                        {widget.visible ? <Eye size={14}/> : <EyeOff size={14}/>}
+                                    </button>
+                                    {widget.type === 'custom' && (
+                                        <button 
+                                            onClick={() => deleteWidget(widget.id)}
+                                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded transition-colors"
+                                            title="Delete Custom Graph"
+                                        >
+                                            <Trash2 size={14}/>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Add Custom */}
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-col">
+                    <h3 className="text-sm font-bold text-slate-300 mb-3 uppercase tracking-wider flex items-center gap-2">
+                        <Sparkles size={14} className="text-indigo-400"/> 
+                        Create Custom Graph
+                    </h3>
+                    <div className="flex-1 flex flex-col gap-3">
+                        <textarea 
+                            value={newWidgetQuery}
+                            onChange={(e) => setNewWidgetQuery(e.target.value)}
+                            placeholder="Describe graph (e.g. 'Coffee spending by month')"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-indigo-500 flex-1"
+                        />
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={handlePreviewWidget}
+                                disabled={isGeneratingWidget || !newWidgetQuery.trim()}
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white text-xs font-medium py-2 rounded transition-colors flex justify-center items-center gap-2"
+                            >
+                                {isGeneratingWidget ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+                                Preview
+                            </button>
+                            {previewWidgetConfig && !isGeneratingWidget && (
+                                <button 
+                                    onClick={handleSaveWidget}
+                                    className="px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded transition-colors flex items-center gap-1"
+                                >
+                                    <Save size={14}/> Add
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    {/* Preview Area */}
+                    {previewWidgetConfig && (
+                        <div className="mt-3 h-24 bg-slate-900 rounded border border-slate-600 relative overflow-hidden flex items-center justify-center">
+                            <ResponsiveContainer width="100%" height="100%">
+                                {renderPreviewChart(previewWidgetConfig) || <div/>}
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+
         {/* Session Data Management */}
         <div className="border-t border-slate-700 pt-6">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -197,9 +340,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                         <input type="file" className="hidden" accept=".json" onChange={onImportSession} />
                     </label>
                 </div>
-                <p className="text-slate-500 mt-3 text-xs text-center">
-                    Export saves transactions, categories, rules, and settings to a JSON file. Importing will create a new session from that file.
-                </p>
             </div>
         </div>
 
@@ -230,8 +370,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
             </div>
             
-            <p className="text-slate-400 mb-4 text-sm">Rules are applied automatically when importing files.</p>
-
             {/* Add / Edit Rule */}
             <div className={`flex flex-col sm:flex-row gap-2 mb-4 p-3 rounded-lg border transition-colors ${editingRuleId ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-800/50 border-slate-700'}`}>
                 <div className="flex-1 flex gap-2">
