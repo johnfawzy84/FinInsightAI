@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeFinancesDeeply, chatWithFinanceAssistant } from '../services/gemini';
 import { Transaction } from '../types';
-import { Sparkles, Send, BrainCircuit, Loader2, Bot, X, Minimize2, Maximize2 } from 'lucide-react';
+import { Sparkles, Send, BrainCircuit, Loader2, Bot, X, Globe } from 'lucide-react';
 
 interface AIConsultantProps {
   transactions: Transaction[];
@@ -14,11 +14,12 @@ interface Message {
   role: 'user' | 'model';
   content: string;
   isThinking?: boolean;
+  groundingChunks?: any[];
 }
 
 const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClose }) => {
   const [messages, setMessages] = useState<Message[]>([
-    { id: 'welcome', role: 'model', content: "Hello! I'm your financial AI assistant. I can help categorize your spending, analyze trends, or give saving advice. How can I help today?" }
+    { id: 'welcome', role: 'model', content: "Hello! I'm your financial AI assistant. I can help categorize your spending, analyze trends, or search for financial info. How can I help today?" }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +45,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
     setIsLoading(true);
 
     try {
-      let responseText = "";
+      let responseData: { text: string; groundingChunks?: any[] };
 
       // Ensure data is sorted chronologically for the AI context
       const sortedTransactions = [...transactions].sort((a, b) => {
@@ -53,18 +54,19 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
 
       if (useThinkingModel) {
         // Use Gemini 3 Pro with Thinking
-        responseText = await analyzeFinancesDeeply(sortedTransactions, userMessage.content);
+        responseData = await analyzeFinancesDeeply(sortedTransactions, userMessage.content);
       } else {
-        // Use standard chat (Flash)
+        // Use standard chat (Flash + Search)
         const history = messages.map(m => ({ role: m.role, content: m.content }));
-        responseText = await chatWithFinanceAssistant(history, userMessage.content, sortedTransactions);
+        responseData = await chatWithFinanceAssistant(history, userMessage.content, sortedTransactions);
       }
 
       const modelMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        content: responseText,
-        isThinking: useThinkingModel
+        content: responseData.text,
+        isThinking: useThinkingModel,
+        groundingChunks: responseData.groundingChunks
       };
       
       setMessages(prev => [...prev, modelMessage]);
@@ -154,6 +156,29 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
                         </div>
                     )}
                     {msg.content}
+                    
+                    {/* Render Search Sources */}
+                    {msg.groundingChunks && msg.groundingChunks.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-700/50 text-xs">
+                            <p className="font-semibold text-slate-400 mb-2 flex items-center gap-1">
+                            <Globe size={12} /> Sources
+                            </p>
+                            <div className="flex flex-col gap-1">
+                            {msg.groundingChunks.map((chunk, idx) => chunk.web ? (
+                                <a 
+                                    key={idx} 
+                                    href={chunk.web.uri} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 bg-slate-900/50 hover:bg-slate-900 border border-slate-700 hover:border-indigo-500/50 text-indigo-300 hover:text-indigo-200 px-2 py-1.5 rounded transition-all truncate"
+                                >
+                                    <div className="w-1 h-1 bg-indigo-400 rounded-full shrink-0"></div>
+                                    <span className="truncate">{chunk.web.title || chunk.web.uri}</span>
+                                </a>
+                            ) : null)}
+                            </div>
+                        </div>
+                    )}
                     </div>
                 </div>
                 ))}
@@ -167,7 +192,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
                         <Loader2 size={16} className="animate-spin text-indigo-400" />
                     )}
                     <span className="text-xs font-medium">
-                        {useThinkingModel ? 'Thinking deeply...' : 'Analyzing...'}
+                        {useThinkingModel ? 'Thinking deeply...' : 'Analyzing & Searching...'}
                     </span>
                     </div>
                 </div>
@@ -187,7 +212,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
                             if (!isLoading) handleSend();
                         }
                     }}
-                    placeholder={useThinkingModel ? "Ask complex questions..." : "Type a message..."}
+                    placeholder={useThinkingModel ? "Ask complex questions..." : "Ask a question (Searches web & data)..."}
                     className="flex-1 bg-slate-800 border border-slate-600 text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-slate-500 resize-none min-h-[50px] max-h-[120px]"
                     disabled={isLoading}
                     rows={1}

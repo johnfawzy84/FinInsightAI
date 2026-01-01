@@ -119,8 +119,8 @@ export const generateRulesFromHistory = async (
 export const analyzeFinancesDeeply = async (
   transactions: Transaction[],
   userQuery: string
-): Promise<string> => {
-  if (transactions.length === 0) return "No transaction data available for analysis.";
+): Promise<{ text: string }> => {
+  if (transactions.length === 0) return { text: "No transaction data available for analysis." };
 
   // Calculate metadata for grounding
   const count = transactions.length;
@@ -160,29 +160,27 @@ export const analyzeFinancesDeeply = async (
       }
     });
 
-    return response.text || "I couldn't generate an analysis at this time.";
+    return { text: response.text || "I couldn't generate an analysis at this time." };
   } catch (error) {
     console.error("Error in deep analysis:", error);
-    return "Sorry, I encountered an error while thinking about your finances. Please try again.";
+    return { text: "Sorry, I encountered an error while thinking about your finances. Please try again." };
   }
 };
 
 /**
- * Simple chat helper for quick questions using Flash.
+ * Simple chat helper for quick questions using Flash + Google Search.
  */
 export const chatWithFinanceAssistant = async (
   history: { role: 'user' | 'model'; content: string }[],
   currentMessage: string,
   transactions: Transaction[]
-): Promise<string> => {
+): Promise<{ text: string, groundingChunks?: any[] }> => {
     
   // Data Grounding
   const count = transactions.length;
-  if (count === 0) return "I don't have any transaction data to analyze yet.";
-
-  // Calculate stats to guide the model
-  const startDate = transactions[0].date;
-  const endDate = transactions[count - 1].date;
+  // If no transactions, we still allow chat as they might ask general questions via search
+  const startDate = transactions.length > 0 ? transactions[0].date : 'N/A';
+  const endDate = transactions.length > 0 ? transactions[count - 1].date : 'N/A';
 
   // Compress data slightly to save tokens while keeping readability
   const dataStr = JSON.stringify(transactions.map(t => ({
@@ -194,8 +192,7 @@ export const chatWithFinanceAssistant = async (
   })));
 
   const systemInstruction = `
-    You are a helpful financial assistant. 
-    You have access to the user's transaction data.
+    You are a helpful financial assistant with access to Google Search and the user's transaction data.
     
     DATA METADATA:
     - Total Transactions: ${count}
@@ -203,30 +200,35 @@ export const chatWithFinanceAssistant = async (
     - Today's Date: ${new Date().toISOString().split('T')[0]}
 
     INSTRUCTIONS:
-    1. Base your answers ONLY on the provided JSON data.
-    2. If the user asks about a month or year that is NOT in the "Date Range Available", explicitly state that you have no data for that period. Do not make up numbers.
-    3. Keep answers concise unless asked for detail.
+    1. If the user asks about their spending, income, or specific transactions, base your answer PRIMARILY on the provided JSON data.
+    2. If the user asks about general financial concepts (e.g., "current inflation rate", "what is an ETF"), market data, or facts not in the database, use Google Search to provide up-to-date information.
+    3. If the user asks about a month or year NOT in the "Date Range Available", explicitly state that you have no personal data for that period, but you can provide general advice or search for trends if asked.
+    4. Keep answers concise unless asked for detail.
     
     TRANSACTION DATA (JSON):
     ${dataStr}
   `;
 
   try {
-    // Note: We use generateContent with history injected manually for a stateless-like wrapper
-    // ideally utilize chats.create for multi-turn if persistent context is needed, 
-    // but here we rebuild context every time to ensure data freshness.
+    // We use gemini-3-flash-preview for the chat to enable search grounding
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: [
             ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
             { role: 'user', parts: [{ text: currentMessage }] }
         ],
-        config: { systemInstruction }
+        config: { 
+            systemInstruction,
+            tools: [{ googleSearch: {} }] // Enable Google Search
+        }
     });
 
-    return response.text || "I couldn't generate a response.";
+    return { 
+        text: response.text || "I couldn't generate a response.",
+        groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks
+    };
   } catch (error) {
     console.error("Chat error:", error);
-    return "I'm having trouble connecting to the AI service right now.";
+    return { text: "I'm having trouble connecting to the AI service right now." };
   }
 };
