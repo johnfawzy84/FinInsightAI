@@ -9,8 +9,9 @@ import {
 } from 'recharts';
 import { Transaction, TransactionType, Asset, Session, DashboardWidget } from '../types';
 import { AssetManagerModal } from './AssetManagerModal';
+import { ExpandedChartModal } from './ExpandedChartModal';
 import { generateDynamicChart } from '../services/gemini';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save, Check, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save, Check, X, Maximize2 } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -132,6 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
   
   // UI State
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+  const [expandedChartConfig, setExpandedChartConfig] = useState<any>(null);
 
   // Dynamic Chart State (Playground)
   const [customQuery, setCustomQuery] = useState('');
@@ -456,8 +458,81 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
      )
   );
 
+  // --- EXPANSION HANDLER ---
+  const handleExpandWidget = (widget: DashboardWidget) => {
+    let config = null;
+
+    if (widget.type === 'custom' && widget.cachedConfig) {
+        config = { ...widget.cachedConfig, description: widget.query };
+    } else if (widget.type === 'net-worth') {
+        config = {
+            chartType: 'area',
+            title: widget.title,
+            description: "Detailed view of your net worth over time.",
+            data: netWorthData,
+            xAxisKey: 'date',
+            series: [{ dataKey: 'value', name: 'Net Worth', color: '#10b981' }]
+        };
+    } else if (widget.type === 'cash-flow') {
+        config = {
+            chartType: 'bar',
+            title: widget.title,
+            description: "Monthly income vs expenses comparison.",
+            data: cashFlowData,
+            xAxisKey: 'name',
+            series: [
+                { dataKey: 'income', name: 'Income', color: '#10b981' },
+                { dataKey: 'expense', name: 'Expenses', color: '#ef4444' }
+            ]
+        };
+    } else if (widget.type === 'spending') {
+        config = {
+            chartType: 'pie',
+            title: widget.title,
+            description: "Breakdown of expenses by category.",
+            data: spendingData,
+            xAxisKey: 'name', // Label
+            series: [{ dataKey: 'value' }] // Value
+        };
+    } else if (widget.type === 'assets') {
+         config = {
+            chartType: 'pie',
+            title: widget.title,
+            description: "Distribution of your assets.",
+            data: assets.map((a, i) => ({ ...a, color: a.color || COLORS[i % COLORS.length] })),
+            xAxisKey: 'name',
+            series: [{ dataKey: 'value' }]
+        };
+    } else if (widget.type === 'sankey') {
+         config = {
+             chartType: 'sankey',
+             title: widget.title,
+             description: "Flow of money from income sources to expense categories.",
+             data: sankeyData,
+             // Sankey doesn't use standard axis keys
+             xAxisKey: '', 
+             series: []
+         };
+    }
+
+    if (config) {
+        setExpandedChartConfig(config);
+    }
+  };
+
+
   // --- WIDGET MAP ---
   const renderWidget = (widget: DashboardWidget) => {
+      const ExpandButton = () => (
+          <button 
+            onClick={() => handleExpandWidget(widget)}
+            className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors ml-2"
+            title="Maximize and Zoom"
+          >
+              <Maximize2 size={16} />
+          </button>
+      );
+
       switch(widget.type) {
           case 'net-worth':
               return (
@@ -467,9 +542,12 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <h3 className="text-xl font-bold text-white flex items-center gap-2"><TrendingUp className="text-emerald-400" size={20}/> {widget.title}</h3>
                             <p className="text-xs text-slate-500">Wealth based on cash flow + assets</p>
                         </div>
-                        <div className="text-right">
-                            <p className="text-2xl font-bold text-white">${(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
-                            <p className="text-xs text-emerald-400">Current Estimate</p>
+                        <div className="flex items-center gap-4">
+                             <div className="text-right">
+                                <p className="text-2xl font-bold text-white">${(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
+                                <p className="text-xs text-emerald-400">Current Estimate</p>
+                            </div>
+                            <ExpandButton />
                         </div>
                     </div>
                     {assets.length === 0 && (
@@ -490,7 +568,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <h3 className="text-xl font-bold text-white flex items-center gap-2"><PieIcon className="text-purple-400" size={20}/> {widget.title}</h3>
                             <p className="text-xs text-slate-500">Portfolio Distribution</p>
                         </div>
-                        <button onClick={() => setIsAssetModalOpen(true)} className="p-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-400 rounded-lg transition-all" title="Manage Assets"><Edit2 size={16} /></button>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIsAssetModalOpen(true)} className="p-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-400 rounded-lg transition-all" title="Manage Assets"><Edit2 size={16} /></button>
+                            <ExpandButton />
+                        </div>
                     </div>
                     {renderAssets()}
                   </div>
@@ -503,9 +584,12 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
                             <p className="text-xs text-slate-500">Monthly Income vs Expenses</p>
                         </div>
-                        <div className="flex gap-4 text-xs">
-                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded-sm"></div> Income</div>
-                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-sm"></div> Expenses</div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex gap-4 text-xs">
+                                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded-sm"></div> Income</div>
+                                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-sm"></div> Expenses</div>
+                            </div>
+                            <ExpandButton />
                         </div>
                      </div>
                      {renderCashFlow()}
@@ -514,9 +598,12 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
            case 'spending':
                return (
                    <div className="flex flex-col h-full">
-                        <div className="mb-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {widget.title}</h3>
-                            <p className="text-xs text-slate-500">Distribution of expenses</p>
+                        <div className="mb-4 flex justify-between items-start">
+                            <div>
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {widget.title}</h3>
+                                <p className="text-xs text-slate-500">Distribution of expenses</p>
+                            </div>
+                            <ExpandButton />
                         </div>
                         {renderSpending()}
                    </div>
@@ -524,9 +611,12 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
             case 'sankey':
                 return (
                     <div className="flex flex-col h-full">
-                        <div className="mb-6">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
-                            <p className="text-xs text-slate-500">Flow from Income to Expenses</p>
+                        <div className="mb-6 flex justify-between items-start">
+                            <div>
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
+                                <p className="text-xs text-slate-500">Flow from Income to Expenses</p>
+                            </div>
+                            <ExpandButton />
                         </div>
                         {renderSankey()}
                     </div>
@@ -578,6 +668,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                                         >
                                             {refreshingWidgetId === widget.id ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}
                                         </button>
+                                        <ExpandButton />
                                     </div>
                                 </>
                             )}
@@ -606,6 +697,12 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
             onClose={() => setIsAssetModalOpen(false)} 
         />
       )}
+
+      {/* Expanded Chart Overlay */}
+      <ExpandedChartModal 
+        config={expandedChartConfig} 
+        onClose={() => setExpandedChartConfig(null)} 
+      />
 
       {/* Dynamic AI Chart Designer (Playground) */}
       <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-6 rounded-xl border border-indigo-500/30 shadow-lg relative overflow-hidden group">
@@ -648,6 +745,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <button onClick={handleSavePlaygroundChart} className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded transition-colors shadow">
                                 <Save size={14}/> Save to Dashboard
                             </button>
+                            <button onClick={() => setExpandedChartConfig({...customChartConfig, description: customQuery})} className="text-slate-500 hover:text-white p-1"><Maximize2 size={14}/></button>
                             <button onClick={() => setCustomChartConfig(null)} className="text-slate-500 hover:text-white p-1"><RefreshCw size={14}/></button>
                         </div>
                      </div>
