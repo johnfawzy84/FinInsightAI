@@ -232,3 +232,68 @@ export const chatWithFinanceAssistant = async (
     return { text: "I'm having trouble connecting to the AI service right now." };
   }
 };
+
+/**
+ * Generates a dynamic chart configuration based on user query and transaction data.
+ */
+export const generateDynamicChart = async (
+    transactions: Transaction[],
+    userQuery: string
+  ): Promise<any> => {
+    // Compress data for the prompt
+    const dataStr = JSON.stringify(transactions.map(t => ({
+        d: t.date,
+        a: t.amount,
+        c: t.category,
+        t: t.type
+    })));
+  
+    const prompt = `
+      You are a data visualization expert. The user wants to graph their financial data.
+      
+      User Query: "${userQuery}"
+      
+      Raw Data (d=date, a=amount, c=category, t=type):
+      ${dataStr}
+  
+      INSTRUCTIONS:
+      1. Process the Raw Data to answer the User Query (e.g., aggregate by month, filter by category, sum up totals).
+      2. Determine the best chart type: 'bar', 'line', 'area', or 'pie'.
+      3. Create a JSON object compatible with Recharts.
+      4. Colors: Use hex codes like #6366f1 (indigo), #10b981 (emerald), #f59e0b (amber), #ef4444 (red), #ec4899 (pink).
+      
+      OUTPUT SCHEMA (JSON):
+      {
+        "chartType": "bar" | "line" | "area" | "pie",
+        "title": "Short descriptive title",
+        "xAxisKey": "name of the key for x-axis (e.g. 'name', 'date', 'month')",
+        "series": [
+            { "dataKey": "key for value 1", "name": "Legend Name 1", "color": "#hex" },
+            { "dataKey": "key for value 2", "name": "Legend Name 2", "color": "#hex" }
+        ],
+        "data": [
+            { "xAxisKey": "Label 1", "valueKey1": 100, "valueKey2": 50 },
+            ...
+        ]
+      }
+      
+      If the query is impossible to answer with the data, return chartType: "error" and a title explaining why.
+    `;
+  
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          // Removed responseSchema here because 'data' items have dynamic keys.
+          // Type.OBJECT schema requires non-empty properties, which conflicts with dynamic data structures needed for Recharts.
+        }
+      });
+  
+      return JSON.parse(response.text || "{}");
+    } catch (error) {
+      console.error("Error generating chart:", error);
+      return { chartType: "error", title: "Failed to generate chart structure." };
+    }
+  };

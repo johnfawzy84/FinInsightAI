@@ -1,15 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   AreaChart, Area, 
   BarChart, Bar, 
   PieChart, Pie, Cell, 
   Sankey, Tooltip as RechartsTooltip, 
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend,
-  Sector
+  Sector, LineChart, Line
 } from 'recharts';
 import { Transaction, TransactionType, Asset } from '../types';
 import { AssetManagerModal } from './AssetManagerModal';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2 } from 'lucide-react';
+import { generateDynamicChart } from '../services/gemini';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -26,7 +27,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <p className="text-slate-200 text-sm font-medium mb-1">{label || payload[0].name}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-xs" style={{ color: entry.color || entry.fill }}>
-            {entry.name}: <span className="font-bold font-mono">${entry.value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+            {entry.name}: <span className="font-bold font-mono">${(typeof entry.value === 'number') ? entry.value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) : entry.value}</span>
           </p>
         ))}
       </div>
@@ -46,6 +47,32 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
   
   // UI State
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+
+  // Dynamic Chart State
+  const [customQuery, setCustomQuery] = useState('');
+  const [isGeneratingChart, setIsGeneratingChart] = useState(false);
+  const [customChartConfig, setCustomChartConfig] = useState<any>(null);
+
+  // Auto-fit Date Range on Data Load
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const dates = transactions.map(t => t.date).sort();
+      const minData = dates[0];
+      const maxData = dates[dates.length - 1];
+      
+      const today = new Date().toISOString().split('T')[0];
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
+
+      // If the most recent transaction is older than 6 months, or future dated beyond today
+      // we shift the view to cover the transaction history.
+      if (maxData < sixMonthsAgoStr || minData > today) {
+         setStartDate(minData);
+         setEndDate(maxData);
+      }
+    }
+  }, [transactions.length]); // Dependency on length change (import)
 
   // Quick Select Handler
   const setQuickRange = (months: number | 'YTD' | 'ALL') => {
@@ -75,29 +102,30 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
     return transactions.filter(t => t.date >= startDate && t.date <= endDate);
   }, [transactions, startDate, endDate]);
 
+  // --- AI Chart Generator ---
+  const handleGenerateCustomChart = async () => {
+    if (!customQuery.trim()) return;
+    setIsGeneratingChart(true);
+    setCustomChartConfig(null);
+    try {
+        const config = await generateDynamicChart(transactions, customQuery);
+        setCustomChartConfig(config);
+    } catch (e) {
+        console.error(e);
+        alert("Failed to generate chart. Please try again.");
+    } finally {
+        setIsGeneratingChart(false);
+    }
+  };
+
   // --- 1. Net Worth Trend (Back-calculation) ---
   const netWorthData = useMemo(() => {
-    // Current Total Wealth
     const currentWealth = assets.reduce((sum, a) => sum + a.value, 0);
     
-    // Sort all transactions desc to walk backwards
+    // Sort all transactions desc
     const allSorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-    // Create daily points from today backwards to start of time (or reasonably far)
-    // Map: Date -> NetWorth at end of that day
-    const trendMap = new Map<string, number>();
-    let runningWealth = currentWealth;
-    
-    // We walk backwards. 
-    // Wealth(Yesterday) = Wealth(Today) - Income(Today) + Expense(Today)
-    
-    // We need points for every day in the requested range + some buffer? 
-    // Actually, let's just generate points for every transaction date, plus today.
-    
-    const todayStr = new Date().toISOString().split('T')[0];
-    trendMap.set(todayStr, runningWealth);
-
-    // Group transactions by date
+    // Create map for O(1) lookups
     const txByDate = new Map<string, { income: number, expense: number }>();
     allSorted.forEach(t => {
         const curr = txByDate.get(t.date) || { income: 0, expense: 0 };
@@ -106,75 +134,33 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
         txByDate.set(t.date, curr);
     });
 
-    // Get all unique dates from transactions + today, sorted DESC
-    const dates = Array.from(new Set([todayStr, ...allSorted.map(t => t.date)])).sort().reverse();
-    
-    dates.forEach((date, i) => {
-        if (i > 0) {
-            // Calculate wealth at END of previous date (which is next in sorted DESC list)
-            // But actually we are iterating backwards in time.
-            // runningWealth is currently at 'date'. 
-            // To get to 'prevDate' (tomorrow in list, yesterday in time), we undo the flow of 'date'.
-            // Wait, iterating DESC (Today -> Past).
-            
-            // Loop starts at Today. runningWealth = Current.
-            // Move to yesterday. 
-            // Wealth(Yesterday) = Wealth(Today) - Income(Today) + Expense(Today)
-            
-            // We need to adjust runningWealth based on transactions of the *previous loop date*? 
-            // No, strictly: Wealth(Start of Day X) = Wealth(End of Day X) - Income(X) + Expense(X)
-            // Wealth(End of Day X-1) = Wealth(Start of Day X)
-            
-            // So:
-            // 1. We have Wealth(End of Date[i])
-            // 2. Adjust for transactions on Date[i] to get Wealth(Start of Date[i])
-            // 3. This equals Wealth(End of Date[i+1]) -- where i+1 is the previous day chronologically
-            
-            const flow = txByDate.get(date) || { income: 0, expense: 0 };
-            runningWealth = runningWealth - flow.income + flow.expense;
-            
-            // This 'runningWealth' is now the balance at the end of the day BEFORE 'date'.
-            // We need to look ahead to what the next date in our list is to record it?
-            // Actually, simplified: just record the value for the *next* date in the array (which is further in past).
-        }
-        
-        // However, gaps in dates need to be filled or handled by chart line.
-        // Let's just store the point we just calculated for the day BEFORE the current date being processed.
-        // Actually, easier:
-        // Iterate dates DESC. 
-        // For 'date', we know End Balance.
-        // We calculate Start Balance = End - Income + Expense.
-        // Start Balance of 'date' is End Balance of 'date - 1'.
-    });
-
-    // Re-do Logic strictly:
     const dataPoints: { date: string, value: number }[] = [];
     let cursorWealth = currentWealth;
     
-    // We need a continuous timeline from End Date back to Start Date
-    const startObj = new Date(startDate);
-    const endObj = new Date(endDate);
-    const todayObj = new Date();
+    // Safe UTC Loop
+    const endUTC = new Date(endDate);
+    const startUTC = new Date(startDate);
     
-    // Adjust endObj to be at least today if we want to show current balance
-    const effectiveEnd = endObj > todayObj ? endObj : todayObj;
+    // Ensure we start loop from at least Today if 'endDate' is in future, 
+    // unless 'endDate' is specifically chosen. 
+    // Actually, we should just walk back from max(Today, endDate).
+    // But to match the XAxis of the chart which respects 'endDate', we start there.
+    // However, if endDate is in the future, we assume no transactions happen in future, 
+    // so wealth remains constant from Today -> Future.
     
-    // Generate array of dates from Effective End down to Start
-    const dateArray: string[] = [];
-    for (let d = new Date(effectiveEnd); d >= startObj; d.setDate(d.getDate() - 1)) {
-        dateArray.push(d.toISOString().split('T')[0]);
+    // We iterate backwards from End Date to Start Date
+    for (let d = new Date(endUTC); d >= startUTC; d.setUTCDate(d.getUTCDate() - 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        
+        dataPoints.push({ date: dateStr, value: cursorWealth });
+        
+        // Adjust cursor for previous day (which is next in iteration but prev in time)
+        // Wealth(Yesterday) = Wealth(Today) - Income(Today) + Expense(Today)
+        const flow = txByDate.get(dateStr) || { income: 0, expense: 0 };
+        cursorWealth = cursorWealth - flow.income + flow.expense;
     }
 
-    dateArray.forEach(d => {
-        // Record End of Day Balance
-        dataPoints.push({ date: d, value: cursorWealth });
-        
-        // Undo transactions of this day to prep for yesterday
-        const flow = txByDate.get(d) || { income: 0, expense: 0 };
-        cursorWealth = cursorWealth - flow.income + flow.expense;
-    });
-
-    return dataPoints.reverse(); // Return ASC for chart
+    return dataPoints.reverse();
   }, [transactions, assets, startDate, endDate]);
 
 
@@ -185,7 +171,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
     filteredTransactions.forEach(t => {
       // Format YYYY-MM
       const date = new Date(t.date);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      // Use UTC methods to avoid off-by-one month if date is 1st of month
+      const year = date.getUTCFullYear();
+      const month = date.getUTCMonth() + 1;
+      const key = `${year}-${String(month).padStart(2, '0')}`;
       
       const current = grouped.get(key) || { income: 0, expense: 0 };
       if (t.type === TransactionType.INCOME) current.income += t.amount;
@@ -260,6 +249,90 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
     return { nodes, links };
   }, [filteredTransactions, spendingData, totalSpent]);
 
+  // --- Dynamic Chart Rendering Helper ---
+  const renderDynamicChart = () => {
+    if (!customChartConfig) return null;
+    if (customChartConfig.chartType === 'error') {
+        return <div className="flex items-center justify-center h-[250px] text-red-400 text-sm">{customChartConfig.title}</div>
+    }
+
+    const { chartType, data, xAxisKey, series } = customChartConfig;
+
+    switch (chartType) {
+        case 'bar':
+            return (
+                <BarChart data={data}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
+                    <YAxis stroke="#64748b" fontSize={10} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Legend />
+                    {series.map((s: any) => (
+                        <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} />
+                    ))}
+                </BarChart>
+            );
+        case 'line':
+            return (
+                <LineChart data={data}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
+                    <YAxis stroke="#64748b" fontSize={10} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Legend />
+                    {series.map((s: any) => (
+                        <Line key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} strokeWidth={2} />
+                    ))}
+                </LineChart>
+            );
+         case 'area':
+            return (
+                <AreaChart data={data}>
+                    <defs>
+                        {series.map((s: any, i: number) => (
+                            <linearGradient key={s.dataKey} id={`color${i}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={s.color} stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor={s.color} stopOpacity={0}/>
+                            </linearGradient>
+                        ))}
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
+                    <YAxis stroke="#64748b" fontSize={10} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Legend />
+                    {series.map((s: any, i: number) => (
+                        <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} fill={`url(#color${i})`} />
+                    ))}
+                </AreaChart>
+            );
+         case 'pie':
+             return (
+                 <PieChart>
+                     <Pie
+                        data={data}
+                        dataKey={series[0].dataKey} // Pie usually has 1 value key
+                        nameKey={xAxisKey}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                     >
+                        {data.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
+                        ))}
+                     </Pie>
+                     <RechartsTooltip content={<CustomTooltip />} />
+                     <Legend />
+                 </PieChart>
+             );
+        default:
+            return null;
+    }
+  };
+
+
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       
@@ -271,6 +344,54 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
             onClose={() => setIsAssetModalOpen(false)} 
         />
       )}
+
+      {/* Dynamic AI Chart Designer */}
+      <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-6 rounded-xl border border-indigo-500/30 shadow-lg relative overflow-hidden group">
+         <div className="relative z-10">
+             <div className="flex items-center gap-2 mb-4">
+                 <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-300">
+                     <Sparkles size={20} />
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-bold text-white">AI Insights Designer</h3>
+                    <p className="text-xs text-indigo-200">Describe what you want to visualize (e.g. "Monthly food spending for 2024" or "Income vs Rent")</p>
+                 </div>
+             </div>
+             
+             <div className="flex gap-2 mb-4">
+                 <input 
+                    type="text" 
+                    value={customQuery}
+                    onChange={(e) => setCustomQuery(e.target.value)}
+                    placeholder="Ask for a specific graph..."
+                    className="flex-1 bg-slate-900/80 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateCustomChart()}
+                 />
+                 <button 
+                    onClick={handleGenerateCustomChart}
+                    disabled={isGeneratingChart || !customQuery.trim()}
+                    className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white px-6 rounded-lg font-medium shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2"
+                 >
+                    {isGeneratingChart ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                    Generate
+                 </button>
+             </div>
+
+             {/* Rendered Chart Area */}
+             {customChartConfig && (
+                 <div className="bg-slate-900/50 rounded-xl p-4 border border-indigo-500/20 animate-fade-in min-h-[300px]">
+                     <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-semibold text-white">{customChartConfig.title}</h4>
+                        <button onClick={() => setCustomChartConfig(null)} className="text-slate-500 hover:text-white"><RefreshCw size={14}/></button>
+                     </div>
+                     <ResponsiveContainer width="100%" height={250}>
+                        {renderDynamicChart() || <div></div>}
+                     </ResponsiveContainer>
+                 </div>
+             )}
+         </div>
+      </div>
+
 
       {/* Date Range Selector */}
       <div className="bg-surface p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -334,6 +455,15 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                 <p className="text-xs text-emerald-400">Current Estimate</p>
              </div>
           </div>
+          
+          {assets.length === 0 && (
+             <div className="mb-4 bg-amber-500/10 border border-amber-500/30 p-2 rounded flex items-center gap-2 text-xs text-amber-300">
+                <AlertCircle size={14} />
+                <span>Wealth starts at $0. Add your current assets (Bank, Stocks) for an accurate total.</span>
+                <button onClick={() => setIsAssetModalOpen(true)} className="underline font-bold">Add Assets</button>
+             </div>
+          )}
+
           <ResponsiveContainer width="100%" height={250}>
             <AreaChart data={netWorthData}>
               <defs>
@@ -349,7 +479,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                 fontSize={10} 
                 tickFormatter={(val) => {
                     const d = new Date(val);
-                    return `${d.getMonth() + 1}/${d.getDate()}`;
+                    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
                 }}
                 minTickGap={40}
               />
