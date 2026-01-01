@@ -96,3 +96,11 @@ export interface Session {
   createdAt: number;
   importSettings: ImportSettings;
 }
+
+export interface ImportSelection {
+  transactions: boolean;
+  categories: boolean;
+  rules: boolean;
+  assets: boolean;
+  dashboard: boolean;
+}

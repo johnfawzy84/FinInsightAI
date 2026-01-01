@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { HashRouter } from 'react-router-dom';
-import { Transaction, Category, CategorizationRule, Session } from './types';
+import { Transaction, Category, CategorizationRule, Session, ImportSelection } from './types';
 import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
 import AIConsultant from './components/AIConsultant';
@@ -8,6 +8,7 @@ import TransactionDetailModal from './components/TransactionDetailModal';
 import Sidebar from './components/Sidebar';
 import SettingsView from './components/SettingsView';
 import { RuleProgressModal, SanitizationProposalModal, SanitizationResultModal, BulkUpdateModal } from './components/StatusModals';
+import { ImportSelectionModal } from './components/ImportSelectionModal';
 import { useSessionData, applyRulesToTransactions } from './hooks/useSessionData';
 import { categorizeTransactionsAI, generateRulesFromHistory } from './services/gemini';
 import { parseFile } from './utils/parser';
@@ -25,7 +26,8 @@ const App: React.FC = () => {
     setActiveSessionId, 
     addSession, 
     removeSession, 
-    importSession, 
+    importSession,
+    mergeSession,
     updateTransactions,
     updateSettings,
     updateCategories,
@@ -39,6 +41,9 @@ const App: React.FC = () => {
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [isGeneratingRules, setIsGeneratingRules] = useState(false);
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  
+  // Import State
+  const [importCandidate, setImportCandidate] = useState<Session | null>(null);
 
   // Modal States
   const [bulkUpdateProposal, setBulkUpdateProposal] = useState<{
@@ -111,15 +116,23 @@ const App: React.FC = () => {
         if (!json.transactions || !Array.isArray(json.transactions) || !json.categories || !Array.isArray(json.categories)) {
             throw new Error("Invalid file structure");
         }
-        importSession(json);
-        alert("Session imported successfully!");
+        // Instead of importing immediately, set candidate to show selection modal
+        setImportCandidate(json);
       } catch (err) {
         console.error(err);
-        alert("Failed to import session.");
+        alert("Failed to read session file. Invalid format.");
       }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleConfirmImport = (selection: ImportSelection) => {
+    if (importCandidate) {
+        mergeSession(importCandidate, selection);
+        alert("Selected data merged successfully!");
+        setImportCandidate(null);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -385,6 +398,14 @@ const App: React.FC = () => {
             onConfirm={confirmBulkUpdate}
             onCancel={() => setBulkUpdateProposal(null)}
         />
+        
+        {importCandidate && (
+            <ImportSelectionModal 
+                importData={importCandidate}
+                onConfirm={handleConfirmImport}
+                onCancel={() => setImportCandidate(null)}
+            />
+        )}
 
         {derivedTransactionData && (
             <TransactionDetailModal

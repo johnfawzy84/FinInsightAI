@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget } from '../types';
+import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection } from '../types';
 
 // Helper for synchronous rule application
 export const applyRulesToTransactions = (transactions: Transaction[], rules: CategorizationRule[]): Transaction[] => {
@@ -110,6 +110,81 @@ export const useSessionData = () => {
     setActiveSessionId(newSession.id);
   };
 
+  /**
+   * Merges imported data into the active session based on user selection.
+   */
+  const mergeSession = (incomingData: Session, selection: ImportSelection) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSessionId) return s;
+
+      const merged = { ...s };
+
+      // 1. Merge Categories (Unique union)
+      if (selection.categories) {
+        const currentCats = s.categories || [];
+        const incomingCats = incomingData.categories || [];
+        const newCats = new Set([...currentCats, ...incomingCats]);
+        merged.categories = Array.from(newCats);
+      }
+
+      // 2. Merge Rules (Avoid duplicate keywords)
+      if (selection.rules) {
+        const currentRules = s.rules || [];
+        const existingKeywords = new Set(currentRules.map(r => r.keyword.toLowerCase()));
+        const incomingRules = incomingData.rules || [];
+        const rulesToAdd = incomingRules.filter(r => !existingKeywords.has(r.keyword.toLowerCase()));
+        merged.rules = [...currentRules, ...rulesToAdd];
+      }
+
+      // 3. Merge Transactions (Avoid duplicate IDs, though usually IDs are unique per session)
+      if (selection.transactions) {
+        const currentTx = s.transactions || [];
+        const existingIds = new Set(currentTx.map(t => t.id));
+        const incomingTx = incomingData.transactions || [];
+        const txToAdd = incomingTx.filter(t => !existingIds.has(t.id));
+        merged.transactions = [...currentTx, ...txToAdd];
+      }
+
+      // 4. Merge Assets (Append new assets)
+      if (selection.assets) {
+         // Optionally check for name duplicates or just append
+         // Here we simply append to avoid data loss, user can delete duplicates
+         const incomingAssets = incomingData.assets || [];
+         const newAssets = incomingAssets.map(a => ({ ...a, id: `imported-asset-${Date.now()}-${Math.random()}` }));
+         merged.assets = [...(s.assets || []), ...newAssets];
+      }
+
+      // 5. Merge Dashboard (Add custom widgets)
+      if (selection.dashboard) {
+         const existingWidgets = s.dashboardWidgets || [];
+         const incomingWidgets = incomingData.dashboardWidgets || [];
+         
+         // Logic: Keep existing standard widgets, append new custom widgets
+         // If standard widgets in import have different visibility, should we respect that? 
+         // Let's assume user wants to import the *configuration* of the dashboard.
+         // Strategy: Update visibility of standard widgets, Append custom widgets.
+         
+         const standardTypes = ['net-worth', 'assets', 'cash-flow', 'spending', 'sankey'];
+         
+         const updatedWidgets = existingWidgets.map(w => {
+            const match = incomingWidgets.find(iw => iw.type === w.type);
+            if (match && standardTypes.includes(w.type)) {
+                return { ...w, visible: match.visible, width: match.width };
+            }
+            return w;
+         });
+
+         const newCustomWidgets = incomingWidgets
+            .filter(iw => iw.type === 'custom')
+            .map(iw => ({ ...iw, id: `imported-widget-${Date.now()}-${Math.random()}` })); // Regen ID to avoid conflict
+
+         merged.dashboardWidgets = [...updatedWidgets, ...newCustomWidgets];
+      }
+
+      return merged;
+    }));
+  };
+
   // Updaters
   const updateTransactions = (updater: (currentTransactions: Transaction[]) => Transaction[]) => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, transactions: updater(s.transactions) } : s));
@@ -157,6 +232,7 @@ export const useSessionData = () => {
     addSession,
     removeSession,
     importSession,
+    mergeSession,
     updateTransactions,
     updateSettings,
     updateCategories,
