@@ -22,9 +22,11 @@ interface SidebarProps {
   onCreateSession: (name: string) => void;
   onDeleteSession: (e: React.MouseEvent, id: string) => void;
   activeTab: string;
-  onSelectTab: (tab: 'dashboard' | 'transactions' | 'consultant' | 'settings') => void;
+  onSelectTab: (tab: 'dashboard' | 'transactions' | 'settings') => void;
   onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   activeSessionName: string;
+  onToggleChat: () => void;
+  isChatOpen: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -36,7 +38,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onSelectTab,
   onImportFile,
-  activeSessionName
+  activeSessionName,
+  onToggleChat,
+  isChatOpen
 }) => {
   const [isSessionsExpanded, setIsSessionsExpanded] = useState(true);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -157,19 +161,22 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <button 
-          onClick={() => onSelectTab('consultant')}
-          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'consultant' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
-        >
-          <MessageSquareText size={20} />
-          <span className="font-medium">Consult AI</span>
-        </button>
-
-        <button 
           onClick={() => onSelectTab('settings')}
           className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
         >
           <Settings size={20} />
           <span className="font-medium">Settings</span>
+        </button>
+
+        <div className="border-t border-slate-700 my-2 mx-2"></div>
+
+        <button 
+          onClick={onToggleChat}
+          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${isChatOpen ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+        >
+          <MessageSquareText size={20} />
+          <span className="font-medium">Consult AI</span>
+          {isChatOpen && <span className="ml-auto w-2 h-2 rounded-full bg-white animate-pulse"></span>}
         </button>
       </div>
 

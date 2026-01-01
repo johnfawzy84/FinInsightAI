@@ -14,7 +14,8 @@ import { parseFile } from './utils/parser';
 import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'consultant' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings'>('dashboard');
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   // Data State via Custom Hook
   const { 
@@ -340,8 +341,26 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <div className="min-h-screen bg-background text-slate-200 font-sans selection:bg-indigo-500/30 relative">
+      <div className="min-h-screen bg-background text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-x-hidden">
         
+        {/* --- GLOBAL COMPONENTS --- */}
+        <AIConsultant 
+            transactions={activeSession.transactions} 
+            isOpen={isChatOpen} 
+            onClose={() => setIsChatOpen(false)}
+        />
+        
+        {/* Floating Chat Button (Visible when chat is closed on Desktop) */}
+        {!isChatOpen && (
+            <button 
+                onClick={() => setIsChatOpen(true)}
+                className="hidden md:flex fixed bottom-8 right-8 z-30 p-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg shadow-indigo-500/30 transition-all hover:scale-110 items-center justify-center animate-bounce-subtle"
+                title="Open Financial Assistant"
+            >
+                <MessageSquareText size={24} />
+            </button>
+        )}
+
         {/* --- MODALS --- */}
         <RuleProgressModal 
             status={ruleApplicationStatus} 
@@ -391,6 +410,8 @@ const App: React.FC = () => {
             activeTab={activeTab}
             onSelectTab={setActiveTab}
             onImportFile={handleFileUpload}
+            onToggleChat={() => setIsChatOpen(prev => !prev)}
+            isChatOpen={isChatOpen}
         />
 
         {/* Mobile Header */}
@@ -405,22 +426,21 @@ const App: React.FC = () => {
         </div>
 
         {/* Mobile Bottom Nav */}
-        <div className="md:hidden fixed bottom-0 w-full bg-surface border-t border-slate-700 z-30 flex justify-around p-3">
+        <div className="md:hidden fixed bottom-0 w-full bg-surface border-t border-slate-700 z-30 flex justify-around p-3 pb-safe">
              <button onClick={() => setActiveTab('dashboard')} className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><LayoutDashboard size={24} /></button>
              <button onClick={() => setActiveTab('transactions')} className={`p-2 rounded-lg ${activeTab === 'transactions' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><List size={24} /></button>
-             <button onClick={() => setActiveTab('consultant')} className={`p-2 rounded-lg ${activeTab === 'consultant' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><MessageSquareText size={24} /></button>
+             <button onClick={() => setIsChatOpen(true)} className={`p-2 rounded-lg ${isChatOpen ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><MessageSquareText size={24} /></button>
              <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Settings size={24} /></button>
         </div>
 
         {/* --- MAIN CONTENT --- */}
-        <main className="md:ml-64 p-6 pt-20 md:pt-6 pb-24 md:pb-6 min-h-screen transition-all duration-300">
+        <main className={`md:ml-64 p-6 pt-20 md:pt-6 pb-24 md:pb-6 min-h-screen transition-all duration-300 ${isChatOpen ? 'md:mr-[450px]' : ''}`}>
             <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
                 <div>
                     <div className="flex items-center space-x-3 mb-2">
                       <h1 className="text-3xl font-bold text-white">
                           {activeTab === 'dashboard' && 'Financial Overview'}
                           {activeTab === 'transactions' && 'Transaction History'}
-                          {activeTab === 'consultant' && 'AI Consultant'}
                           {activeTab === 'settings' && 'Session Settings'}
                       </h1>
                       <span className="px-2 py-1 rounded-md bg-indigo-500/20 text-indigo-300 text-xs border border-indigo-500/30 font-medium">
@@ -430,7 +450,6 @@ const App: React.FC = () => {
                     <p className="text-slate-400">
                         {activeTab === 'dashboard' && 'Track your wealth and regular spending.'}
                         {activeTab === 'transactions' && 'Manage and organize your financial records.'}
-                        {activeTab === 'consultant' && 'Get personalized advice powered by Gemini 3 Pro.'}
                         {activeTab === 'settings' && 'Configure categorization rules.'}
                     </p>
                 </div>
@@ -456,7 +475,6 @@ const App: React.FC = () => {
                     onTransactionClick={setSelectedTransactionId} 
                 />
             )}
-            {activeTab === 'consultant' && <AIConsultant transactions={activeSession.transactions} />}
             {activeTab === 'settings' && (
                 <SettingsView 
                     activeSession={activeSession}
