@@ -30,6 +30,7 @@ const App: React.FC = () => {
     updateSettings,
     updateCategories,
     updateRules,
+    updateAssets,
     updateSessionRaw
   } = useSessionData();
 
@@ -466,7 +467,13 @@ const App: React.FC = () => {
                 )}
             </header>
 
-            {activeTab === 'dashboard' && <Dashboard transactions={activeSession.transactions} />}
+            {activeTab === 'dashboard' && (
+                <Dashboard 
+                    transactions={activeSession.transactions} 
+                    assets={activeSession.assets || []}
+                    onUpdateAssets={updateAssets}
+                />
+            )}
             {activeTab === 'transactions' && (
                 <TransactionList 
                     transactions={activeSession.transactions} 

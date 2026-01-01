@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category } from '../types';
+import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset } from '../types';
 
 // Helper for synchronous rule application
 export const applyRulesToTransactions = (transactions: Transaction[], rules: CategorizationRule[]): Transaction[] => {
@@ -39,6 +39,12 @@ export const useSessionData = () => {
     { id: '6', date: '2023-10-10', description: 'Electric Bill', amount: 120, type: TransactionType.EXPENSE, category: Category.UTILITIES },
   ];
 
+  const initialAssets: Asset[] = [
+    { id: 'a1', name: 'Main Checking', value: 2500, type: 'Cash', color: '#10b981' },
+    { id: 'a2', name: 'Savings Account', value: 10000, type: 'Cash', color: '#34d399' },
+    { id: 'a3', name: 'Investment Portfolio', value: 15000, type: 'Stock', color: '#6366f1' },
+  ];
+
   const [sessions, setSessions] = useState<Session[]>([
     {
       id: 'default-session',
@@ -46,6 +52,7 @@ export const useSessionData = () => {
       transactions: initialTransactions,
       categories: [...DEFAULT_CATEGORIES],
       rules: [],
+      assets: initialAssets,
       createdAt: Date.now(),
       importSettings: defaultSettings
     }
@@ -63,6 +70,7 @@ export const useSessionData = () => {
       transactions: [],
       categories: [...DEFAULT_CATEGORIES],
       rules: [],
+      assets: [],
       createdAt: Date.now(),
       importSettings: { ...defaultSettings }
     };
@@ -116,6 +124,10 @@ export const useSessionData = () => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, rules: updater(s.rules) } : s));
   };
 
+  const updateAssets = (updater: (assets: Asset[]) => Asset[]) => {
+    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, assets: updater(s.assets || []) } : s));
+  };
+
   // Raw Session Updater (for complex batch operations involving multiple fields)
   const updateSessionRaw = (updater: (session: Session) => Session) => {
      setSessions(prev => prev.map(s => s.id === activeSessionId ? updater(s) : s));
@@ -133,6 +145,7 @@ export const useSessionData = () => {
     updateSettings,
     updateCategories,
     updateRules,
+    updateAssets,
     updateSessionRaw
   };
 };

@@ -65,12 +65,21 @@ export interface ImportSettings {
   decimalSeparator: '.' | ',';
 }
 
+export interface Asset {
+  id: string;
+  name: string;
+  value: number;
+  type: 'Cash' | 'Stock' | 'Crypto' | 'Real Estate' | 'Other';
+  color: string;
+}
+
 export interface Session {
   id: string;
   name: string;
   transactions: Transaction[];
   categories: string[];
   rules: CategorizationRule[];
+  assets: Asset[];
   createdAt: number;
   importSettings: ImportSettings;
 }

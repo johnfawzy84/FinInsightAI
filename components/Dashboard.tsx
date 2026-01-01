@@ -1,243 +1,545 @@
 import React, { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
-import { Transaction, TransactionType } from '../types';
-import { PieChart as PieIcon, TrendingUp, DollarSign, Repeat, ArrowRight, Layers, Tag } from 'lucide-react';
+import { 
+  AreaChart, Area, 
+  BarChart, Bar, 
+  PieChart, Pie, Cell, 
+  Sankey, Tooltip as RechartsTooltip, 
+  ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend,
+  Sector
+} from 'recharts';
+import { Transaction, TransactionType, Asset } from '../types';
+import { AssetManagerModal } from './AssetManagerModal';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2 } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
+  assets: Asset[];
+  onUpdateAssets: (updater: (assets: Asset[]) => Asset[]) => void;
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
-  const [viewMode, setViewMode] = useState<'main' | 'sub'>('main');
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl z-50">
+        <p className="text-slate-200 text-sm font-medium mb-1">{label || payload[0].name}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-xs" style={{ color: entry.color || entry.fill }}>
+            {entry.name}: <span className="font-bold font-mono">${entry.value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
-  const summary = useMemo(() => {
-    const totalIncome = transactions
-      .filter(t => t.type === TransactionType.INCOME)
-      .reduce((acc, t) => acc + t.amount, 0);
-    const totalExpense = transactions
-      .filter(t => t.type === TransactionType.EXPENSE)
-      .reduce((acc, t) => acc + t.amount, 0);
+const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets }) => {
+  // Date State
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  
+  // UI State
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+
+  // Quick Select Handler
+  const setQuickRange = (months: number | 'YTD' | 'ALL') => {
+    const end = new Date();
+    let start = new Date();
     
-    return {
-      income: totalIncome,
-      expense: totalExpense,
-      balance: totalIncome - totalExpense
-    };
-  }, [transactions]);
+    if (months === 'ALL') {
+        // Find earliest transaction
+        if (transactions.length > 0) {
+            const earliest = transactions.reduce((a, b) => a.date < b.date ? a : b);
+            start = new Date(earliest.date);
+        } else {
+            start.setFullYear(end.getFullYear() - 1);
+        }
+    } else if (months === 'YTD') {
+        start = new Date(end.getFullYear(), 0, 1);
+    } else {
+        start.setMonth(end.getMonth() - months);
+    }
+    
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+  };
 
-  const categoryData = useMemo(() => {
-    const expenses = transactions.filter(t => t.type === TransactionType.EXPENSE);
-    const catMap = new Map<string, number>();
+  // --- Filter Data by Date Range ---
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => t.date >= startDate && t.date <= endDate);
+  }, [transactions, startDate, endDate]);
 
-    expenses.forEach(t => {
-      let key = t.category;
-      if (viewMode === 'main') {
-          // Group by Main Category (e.g. "Utilities.Water" -> "Utilities")
-          // If no dot, it stays as is.
-          key = t.category.split('.')[0].trim();
-      }
-      const current = catMap.get(key) || 0;
-      catMap.set(key, current + t.amount);
+  // --- 1. Net Worth Trend (Back-calculation) ---
+  const netWorthData = useMemo(() => {
+    // Current Total Wealth
+    const currentWealth = assets.reduce((sum, a) => sum + a.value, 0);
+    
+    // Sort all transactions desc to walk backwards
+    const allSorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Create daily points from today backwards to start of time (or reasonably far)
+    // Map: Date -> NetWorth at end of that day
+    const trendMap = new Map<string, number>();
+    let runningWealth = currentWealth;
+    
+    // We walk backwards. 
+    // Wealth(Yesterday) = Wealth(Today) - Income(Today) + Expense(Today)
+    
+    // We need points for every day in the requested range + some buffer? 
+    // Actually, let's just generate points for every transaction date, plus today.
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    trendMap.set(todayStr, runningWealth);
+
+    // Group transactions by date
+    const txByDate = new Map<string, { income: number, expense: number }>();
+    allSorted.forEach(t => {
+        const curr = txByDate.get(t.date) || { income: 0, expense: 0 };
+        if (t.type === TransactionType.INCOME) curr.income += t.amount;
+        else curr.expense += t.amount;
+        txByDate.set(t.date, curr);
     });
 
-    return Array.from(catMap.entries())
+    // Get all unique dates from transactions + today, sorted DESC
+    const dates = Array.from(new Set([todayStr, ...allSorted.map(t => t.date)])).sort().reverse();
+    
+    dates.forEach((date, i) => {
+        if (i > 0) {
+            // Calculate wealth at END of previous date (which is next in sorted DESC list)
+            // But actually we are iterating backwards in time.
+            // runningWealth is currently at 'date'. 
+            // To get to 'prevDate' (tomorrow in list, yesterday in time), we undo the flow of 'date'.
+            // Wait, iterating DESC (Today -> Past).
+            
+            // Loop starts at Today. runningWealth = Current.
+            // Move to yesterday. 
+            // Wealth(Yesterday) = Wealth(Today) - Income(Today) + Expense(Today)
+            
+            // We need to adjust runningWealth based on transactions of the *previous loop date*? 
+            // No, strictly: Wealth(Start of Day X) = Wealth(End of Day X) - Income(X) + Expense(X)
+            // Wealth(End of Day X-1) = Wealth(Start of Day X)
+            
+            // So:
+            // 1. We have Wealth(End of Date[i])
+            // 2. Adjust for transactions on Date[i] to get Wealth(Start of Date[i])
+            // 3. This equals Wealth(End of Date[i+1]) -- where i+1 is the previous day chronologically
+            
+            const flow = txByDate.get(date) || { income: 0, expense: 0 };
+            runningWealth = runningWealth - flow.income + flow.expense;
+            
+            // This 'runningWealth' is now the balance at the end of the day BEFORE 'date'.
+            // We need to look ahead to what the next date in our list is to record it?
+            // Actually, simplified: just record the value for the *next* date in the array (which is further in past).
+        }
+        
+        // However, gaps in dates need to be filled or handled by chart line.
+        // Let's just store the point we just calculated for the day BEFORE the current date being processed.
+        // Actually, easier:
+        // Iterate dates DESC. 
+        // For 'date', we know End Balance.
+        // We calculate Start Balance = End - Income + Expense.
+        // Start Balance of 'date' is End Balance of 'date - 1'.
+    });
+
+    // Re-do Logic strictly:
+    const dataPoints: { date: string, value: number }[] = [];
+    let cursorWealth = currentWealth;
+    
+    // We need a continuous timeline from End Date back to Start Date
+    const startObj = new Date(startDate);
+    const endObj = new Date(endDate);
+    const todayObj = new Date();
+    
+    // Adjust endObj to be at least today if we want to show current balance
+    const effectiveEnd = endObj > todayObj ? endObj : todayObj;
+    
+    // Generate array of dates from Effective End down to Start
+    const dateArray: string[] = [];
+    for (let d = new Date(effectiveEnd); d >= startObj; d.setDate(d.getDate() - 1)) {
+        dateArray.push(d.toISOString().split('T')[0]);
+    }
+
+    dateArray.forEach(d => {
+        // Record End of Day Balance
+        dataPoints.push({ date: d, value: cursorWealth });
+        
+        // Undo transactions of this day to prep for yesterday
+        const flow = txByDate.get(d) || { income: 0, expense: 0 };
+        cursorWealth = cursorWealth - flow.income + flow.expense;
+    });
+
+    return dataPoints.reverse(); // Return ASC for chart
+  }, [transactions, assets, startDate, endDate]);
+
+
+  // --- 2. Cash Flow (Monthly Bar Chart) ---
+  const cashFlowData = useMemo(() => {
+    const grouped = new Map<string, { income: number; expense: number }>();
+    
+    filteredTransactions.forEach(t => {
+      // Format YYYY-MM
+      const date = new Date(t.date);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      const current = grouped.get(key) || { income: 0, expense: 0 };
+      if (t.type === TransactionType.INCOME) current.income += t.amount;
+      else current.expense += t.amount;
+      grouped.set(key, current);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredTransactions]);
+
+  // --- 3. Spending Breakdown (Donut) ---
+  const spendingData = useMemo(() => {
+    const expenses = filteredTransactions.filter(t => t.type === TransactionType.EXPENSE);
+    const grouped = new Map<string, number>();
+    
+    expenses.forEach(t => {
+      const current = grouped.get(t.category) || 0;
+      grouped.set(t.category, current + t.amount);
+    });
+
+    return Array.from(grouped.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [transactions, viewMode]);
+  }, [filteredTransactions]);
 
-  const recentTrends = useMemo(() => {
-      const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      return sorted.slice(-10).map(t => ({
-          date: t.date,
-          amount: t.type === TransactionType.INCOME ? t.amount : -t.amount,
-          description: t.description
-      }));
-  }, [transactions]);
+  const totalSpent = spendingData.reduce((acc, curr) => acc + curr.value, 0);
 
-  // Identify recurring spendings (simple heuristic: same description appearing > 1 time)
-  const regularSpendings = useMemo(() => {
-    const expenses = transactions.filter(t => t.type === TransactionType.EXPENSE);
-    const groups: Record<string, { count: number, amount: number, category: string }> = {};
+  // --- 4. Sankey Data ---
+  const sankeyData = useMemo(() => {
+    // Nodes: 0 = Income, 1 = Surplus (if any), 2..N = Categories
+    const incomeTotal = filteredTransactions
+        .filter(t => t.type === TransactionType.INCOME)
+        .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Get top expense categories
+    const expenseCats = spendingData.slice(0, 6); // Limit to top 6 to keep sankey clean
+    const otherExpense = spendingData.slice(6).reduce((sum, t) => sum + t.value, 0);
+    
+    const totalExpense = totalSpent;
+    const surplus = Math.max(0, incomeTotal - totalExpense);
 
-    expenses.forEach(t => {
-      // Normalize description to find matches
-      const key = t.description.toLowerCase().trim().slice(0, 15); // Check first 15 chars for similarity
-      if (!groups[key]) {
-        groups[key] = { count: 0, amount: t.amount, category: t.category };
-      }
-      groups[key].count += 1;
-      // Keep the latest amount or average? Let's use latest found
-      groups[key].amount = t.amount;
+    const nodes = [
+      { name: 'Income' },
+      ...expenseCats.map(c => ({ name: c.name })),
+    ];
+    
+    if (otherExpense > 0) nodes.push({ name: 'Other' });
+    if (surplus > 0) nodes.push({ name: 'Savings' });
+
+    const links = [];
+    
+    // Link Income to Categories
+    expenseCats.forEach((cat, idx) => {
+      links.push({ source: 0, target: idx + 1, value: cat.value });
     });
 
-    return Object.entries(groups)
-      .filter(([_, data]) => data.count > 1)
-      .map(([key, data]) => ({ description: key, ...data }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5); // Top 5
-  }, [transactions]);
+    if (otherExpense > 0) {
+        links.push({ source: 0, target: expenseCats.length + 1, value: otherExpense });
+    }
+
+    if (surplus > 0) {
+        links.push({ source: 0, target: nodes.length - 1, value: surplus });
+    }
+
+    // Safety: If total expenses > total income, Recharts sankey can glitch. 
+    if (incomeTotal === 0 && totalExpense > 0) {
+       nodes[0].name = "Capital";
+    }
+
+    return { nodes, links };
+  }, [filteredTransactions, spendingData, totalSpent]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400">
-              <TrendingUp size={20} />
-            </div>
-            <h3 className="text-slate-400 font-medium">Total Income</h3>
-          </div>
-          <p className="text-2xl font-bold text-white">${summary.income.toFixed(2)}</p>
+    <div className="space-y-6 animate-fade-in pb-10">
+      
+      {/* Asset Manager Modal */}
+      {isAssetModalOpen && (
+        <AssetManagerModal 
+            assets={assets} 
+            onUpdateAssets={onUpdateAssets} 
+            onClose={() => setIsAssetModalOpen(false)} 
+        />
+      )}
+
+      {/* Date Range Selector */}
+      <div className="bg-surface p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-2 text-slate-300 font-semibold">
+           <Calendar size={20} className="text-indigo-400" />
+           <span>Analysis Period</span>
         </div>
         
-        <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="p-2 bg-red-500/20 rounded-lg text-red-400">
-              <DollarSign size={20} />
-            </div>
-            <h3 className="text-slate-400 font-medium">Total Expenses</h3>
-          </div>
-          <p className="text-2xl font-bold text-white">${summary.expense.toFixed(2)}</p>
+        <div className="flex items-center gap-2">
+            <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs text-white focus:border-indigo-500 outline-none"
+            />
+            <span className="text-slate-500">-</span>
+             <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs text-white focus:border-indigo-500 outline-none"
+            />
         </div>
 
-        <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
-              <PieIcon size={20} />
-            </div>
-            <h3 className="text-slate-400 font-medium">Net Balance</h3>
-          </div>
-          <p className={`text-2xl font-bold ${summary.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            ${summary.balance.toFixed(2)}
-          </p>
+        <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
+          {[
+            { label: '1M', val: 1 },
+            { label: '3M', val: 3 }, 
+            { label: '6M', val: 6 },
+            { label: 'YTD', val: 'YTD' }, 
+            { label: 'ALL', val: 'ALL' }
+          ].map(opt => (
+            <button
+              key={opt.label}
+              onClick={() => setQuickRange(opt.val as any)}
+              className="px-3 py-1 text-xs font-medium rounded-md transition-all text-slate-400 hover:text-white hover:bg-slate-700"
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
+      {/* Row 1: Net Worth & Asset Allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Spending by Category */}
-        <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[400px]">
-          <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-white">Spending by Category</h3>
-              <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-600">
-                  <button
-                      onClick={() => setViewMode('main')}
-                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'main' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                      title="Group by Main Category (e.g. Utilities)"
-                  >
-                      <Layers size={14} />
-                      <span>Main</span>
-                  </button>
-                  <button
-                      onClick={() => setViewMode('sub')}
-                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'sub' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                      title="Show Sub Categories (e.g. Utilities.Water)"
-                  >
-                      <Tag size={14} />
-                      <span>Sub</span>
-                  </button>
-              </div>
+        
+        {/* Net Worth Trend */}
+        <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[350px]">
+          <div className="flex items-center justify-between mb-6">
+             <div>
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <TrendingUp className="text-emerald-400" size={20}/>
+                    Net Worth Trend
+                </h3>
+                <p className="text-xs text-slate-500">Wealth evolution based on cash flow + assets</p>
+             </div>
+             <div className="text-right">
+                <p className="text-2xl font-bold text-white">
+                    ${(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}
+                </p>
+                <p className="text-xs text-emerald-400">Current Estimate</p>
+             </div>
           </div>
+          <ResponsiveContainer width="100%" height={250}>
+            <AreaChart data={netWorthData}>
+              <defs>
+                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                stroke="#64748b" 
+                fontSize={10} 
+                tickFormatter={(val) => {
+                    const d = new Date(val);
+                    return `${d.getMonth() + 1}/${d.getDate()}`;
+                }}
+                minTickGap={40}
+              />
+              <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
+              <RechartsTooltip content={<CustomTooltip />} />
+              <Area 
+                type="monotone" 
+                dataKey="value" 
+                stroke="#10b981" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorValue)" 
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
 
-          {categoryData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  paddingAngle={5}
-                  dataKey="value"
+        {/* Asset Allocation (Pie) */}
+        <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[350px] flex flex-col">
+            <div className="mb-4 flex justify-between items-start">
+                <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <PieIcon className="text-purple-400" size={20}/>
+                        Assets
+                    </h3>
+                    <p className="text-xs text-slate-500">Portfolio Distribution</p>
+                </div>
+                <button 
+                    onClick={() => setIsAssetModalOpen(true)}
+                    className="p-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-400 rounded-lg transition-all"
+                    title="Manage Assets"
                 >
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <RechartsTooltip 
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
-                    itemStyle={{ color: '#fff' }}
-                />
-                <Legend layout="vertical" verticalAlign="middle" align="right" />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-full flex items-center justify-center text-slate-500">
-              No expense data available
+                    <Edit2 size={16} />
+                </button>
             </div>
-          )}
-        </div>
-
-        {/* Regular Spendings */}
-        <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg">
-          <div className="flex items-center space-x-2 mb-6">
-             <Repeat size={20} className="text-purple-400" />
-             <h3 className="text-xl font-semibold text-white">Regular Spendings</h3>
-          </div>
-          
-          <div className="space-y-4">
-            {regularSpendings.length > 0 ? (
-              regularSpendings.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
-                  <div className="overflow-hidden">
-                    <p className="text-sm font-medium text-white capitalize truncate">{item.description}</p>
-                    <p className="text-xs text-slate-500">{item.category}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-slate-200">${item.amount.toFixed(2)}</p>
-                    <p className="text-[10px] text-slate-500 bg-slate-700 inline-block px-1.5 py-0.5 rounded mt-1">
-                      x{item.count}
-                    </p>
-                  </div>
+            {assets.length > 0 ? (
+                <div className="flex-1 flex items-center justify-center relative">
+                    <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                            <Pie
+                                data={assets as any[]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                dataKey="value"
+                            >
+                                {assets.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.5)" />
+                                ))}
+                            </Pie>
+                            <RechartsTooltip content={<CustomTooltip />} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-xs text-slate-400">Total</span>
+                        <span className="text-lg font-bold text-white">
+                            ${assets.reduce((sum, a) => sum + a.value, 0).toLocaleString()}
+                        </span>
+                    </div>
                 </div>
-              ))
             ) : (
-              <div className="text-center text-slate-500 py-10">
-                <p>No recurring transactions detected yet.</p>
-              </div>
-            )}
-            
-            {regularSpendings.length > 0 && (
-                <div className="pt-2 text-center">
-                    <button className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center justify-center w-full">
-                        View All <ArrowRight size={12} className="ml-1" />
-                    </button>
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-3">
+                    <p className="text-sm">No assets added.</p>
+                    <button onClick={() => setIsAssetModalOpen(true)} className="text-xs text-indigo-400 underline">Add Assets</button>
                 </div>
             )}
-          </div>
         </div>
       </div>
 
-      {/* Recent Transaction Flow */}
-      <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[400px]">
-        <h3 className="text-xl font-semibold text-white mb-6">Cash Flow Trend</h3>
-        {recentTrends.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={recentTrends}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickFormatter={(val) => val.slice(5)} />
-                <YAxis stroke="#94a3b8" fontSize={12} />
-                <RechartsTooltip 
-                  cursor={{fill: '#334155', opacity: 0.2}}
-                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
-                />
-                <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]}>
-                  {recentTrends.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.amount > 0 ? '#10b981' : '#ef4444'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-        ) : (
-          <div className="h-full flex items-center justify-center text-slate-500">
-            No transaction history
+      {/* Row 2: Cash Flow & Spending Donut */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Cash Flow Bars */}
+          <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg">
+             <div className="mb-6 flex justify-between items-end">
+                <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Activity className="text-indigo-400" size={20}/>
+                        Cash Flow
+                    </h3>
+                    <p className="text-xs text-slate-500">Monthly Income vs Expenses</p>
+                </div>
+                <div className="flex gap-4 text-xs">
+                    <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-emerald-500 rounded-sm"></div> Income
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-red-500 rounded-sm"></div> Expenses
+                    </div>
+                </div>
+             </div>
+             <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={cashFlowData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
+                    <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `$${val}`} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+             </ResponsiveContainer>
           </div>
-        )}
+
+          {/* Spending Donut */}
+          <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col">
+             <div className="mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Layers className="text-amber-400" size={20}/>
+                    Spending Categories
+                </h3>
+                <p className="text-xs text-slate-500">Distribution of expenses</p>
+             </div>
+             {spendingData.length > 0 ? (
+                <div className="flex-1 flex items-center gap-4">
+                    <div className="w-1/2 h-[250px] relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={spendingData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {spendingData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
+                                    ))}
+                                </Pie>
+                                <RechartsTooltip content={<CustomTooltip />} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        {/* Center Text */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-xs text-slate-400">Total Spent</span>
+                            <span className="text-lg font-bold text-white">${totalSpent.toLocaleString()}</span>
+                        </div>
+                    </div>
+                    
+                    {/* Custom Legend */}
+                    <div className="w-1/2 max-h-[250px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                        {spendingData.map((entry, index) => (
+                            <div key={index} className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                    <span className="text-slate-300 truncate max-w-[100px]">{entry.name}</span>
+                                </div>
+                                <span className="font-mono text-slate-400">${entry.value.toLocaleString()}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+             ) : (
+                <div className="flex-1 flex items-center justify-center text-slate-500">
+                    No expense data for this period.
+                </div>
+             )}
+          </div>
       </div>
+
+      {/* Row 3: Sankey Diagram */}
+      <div className="bg-surface p-6 rounded-xl border border-slate-700 shadow-lg min-h-[400px]">
+         <div className="mb-6">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Activity className="text-indigo-400" size={20}/>
+                Income to Expense Flow
+            </h3>
+            <p className="text-xs text-slate-500">Visualizing how your income distributes into expenses and savings</p>
+         </div>
+         {sankeyData.links.length > 0 ? (
+            <ResponsiveContainer width="100%" height={350}>
+                <Sankey
+                    data={sankeyData}
+                    node={{ stroke: '#1e293b', strokeWidth: 0, fill: '#6366f1' }}
+                    link={{ stroke: '#64748b' }}
+                    nodePadding={50}
+                    margin={{ left: 10, right: 10, top: 10, bottom: 10 }}
+                >
+                    <RechartsTooltip content={<CustomTooltip />} />
+                </Sankey>
+            </ResponsiveContainer>
+         ) : (
+            <div className="h-[300px] flex items-center justify-center text-slate-500">
+                Not enough data to generate flow diagram.
+            </div>
+         )}
+      </div>
+
     </div>
   );
 };
