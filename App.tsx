@@ -9,13 +9,15 @@ import Sidebar from './components/Sidebar';
 import SettingsView from './components/SettingsView';
 import { RuleProgressModal, SanitizationProposalModal, SanitizationResultModal, BulkUpdateModal } from './components/StatusModals';
 import { ImportSelectionModal } from './components/ImportSelectionModal';
+import { SmartImportModal } from './components/SmartImportModal';
 import { useSessionData, applyRulesToTransactions } from './hooks/useSessionData';
 import { categorizeTransactionsAI, generateRulesFromHistory } from './services/gemini';
 import { parseFile } from './utils/parser';
-import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings } from 'lucide-react';
+import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings, Target } from 'lucide-react';
+import { GoalManager } from './components/GoalManager';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings' | 'goals'>('dashboard');
   const [isChatOpen, setIsChatOpen] = useState(false);
   
   // Data State via Custom Hook
@@ -33,6 +35,7 @@ const App: React.FC = () => {
     updateCategories,
     updateRules,
     updateAssets,
+    updateGoals,
     updateDashboardWidgets,
     updateSessionRaw
   } = useSessionData();
@@ -44,6 +47,7 @@ const App: React.FC = () => {
   
   // Import State
   const [importCandidate, setImportCandidate] = useState<Session | null>(null);
+  const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
 
   // Modal States
   const [bulkUpdateProposal, setBulkUpdateProposal] = useState<{
@@ -135,27 +139,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      try {
-        const file = e.target.files[0];
-        const rawTransactions = await parseFile(file, activeSession.importSettings);
-        const importedCategories = Array.from(new Set(rawTransactions.map(t => t.category)))
-            .filter(cat => cat && cat.trim() !== '' && cat !== 'Uncategorized' && !activeSession.categories.includes(cat));
-        const processedTransactions = applyRulesToTransactions(rawTransactions, activeSession.rules);
-
-        updateSessionRaw(s => ({
-            ...s,
-            categories: [...s.categories, ...importedCategories],
-            transactions: [...s.transactions, ...processedTransactions]
-        }));
-        setActiveTab('transactions');
-      } catch (err) {
-        console.error("Failed to parse file", err);
-        alert("Error parsing file.");
-      }
-      e.target.value = ''; 
-    }
+  const handleSmartImportComplete = (newTransactions: Transaction[], newCategories: string[]) => {
+      updateSessionRaw(s => ({
+          ...s,
+          categories: [...s.categories, ...newCategories],
+          transactions: [...s.transactions, ...newTransactions]
+      }));
+      setActiveTab('transactions');
   };
 
   const handleAutoCategorize = async () => {
@@ -377,6 +367,15 @@ const App: React.FC = () => {
         )}
 
         {/* --- MODALS --- */}
+        <SmartImportModal 
+            isOpen={isSmartImportOpen}
+            onClose={() => setIsSmartImportOpen(false)}
+            onImportComplete={handleSmartImportComplete}
+            existingRules={activeSession.rules}
+            existingCategories={activeSession.categories}
+            defaultSettings={activeSession.importSettings}
+        />
+
         <RuleProgressModal 
             status={ruleApplicationStatus} 
             onClose={() => setRuleApplicationStatus(null)} 
@@ -432,7 +431,7 @@ const App: React.FC = () => {
             }}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
-            onImportFile={handleFileUpload}
+            onImportFile={() => setIsSmartImportOpen(true)}
             onToggleChat={() => setIsChatOpen(prev => !prev)}
             isChatOpen={isChatOpen}
         />
@@ -452,6 +451,7 @@ const App: React.FC = () => {
         <div className="md:hidden fixed bottom-0 w-full bg-surface border-t border-slate-700 z-30 flex justify-around p-3 pb-safe">
              <button onClick={() => setActiveTab('dashboard')} className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><LayoutDashboard size={24} /></button>
              <button onClick={() => setActiveTab('transactions')} className={`p-2 rounded-lg ${activeTab === 'transactions' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><List size={24} /></button>
+             <button onClick={() => setActiveTab('goals')} className={`p-2 rounded-lg ${activeTab === 'goals' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Target size={24} /></button>
              <button onClick={() => setIsChatOpen(true)} className={`p-2 rounded-lg ${isChatOpen ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><MessageSquareText size={24} /></button>
              <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Settings size={24} /></button>
         </div>
@@ -464,6 +464,7 @@ const App: React.FC = () => {
                       <h1 className="text-3xl font-bold text-white">
                           {activeTab === 'dashboard' && 'Financial Overview'}
                           {activeTab === 'transactions' && 'Transaction History'}
+                          {activeTab === 'goals' && 'Goals & Allocations'}
                           {activeTab === 'settings' && 'Session Settings'}
                       </h1>
                       <span className="px-2 py-1 rounded-md bg-indigo-500/20 text-indigo-300 text-xs border border-indigo-500/30 font-medium">
@@ -473,6 +474,7 @@ const App: React.FC = () => {
                     <p className="text-slate-400">
                         {activeTab === 'dashboard' && 'Track your wealth and regular spending.'}
                         {activeTab === 'transactions' && 'Manage and organize your financial records.'}
+                        {activeTab === 'goals' && 'Simulate, prioritize, and fund your dreams.'}
                         {activeTab === 'settings' && 'Configure categorization rules.'}
                     </p>
                 </div>
@@ -505,6 +507,14 @@ const App: React.FC = () => {
                     onCategoryChange={handleTransactionCategoryChange} 
                     onTransactionClick={setSelectedTransactionId} 
                 />
+            )}
+            {activeTab === 'goals' && (
+               <GoalManager 
+                    goals={activeSession.goals || []} 
+                    assets={activeSession.assets || []}
+                    transactions={activeSession.transactions}
+                    onUpdateGoals={updateGoals}
+               /> 
             )}
             {activeTab === 'settings' && (
                 <SettingsView 

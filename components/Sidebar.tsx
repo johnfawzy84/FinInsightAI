@@ -11,7 +11,8 @@ import {
   List, 
   MessageSquareText, 
   Settings, 
-  Upload 
+  Upload,
+  Target
 } from 'lucide-react';
 import { Session } from '../types';
 
@@ -22,8 +23,8 @@ interface SidebarProps {
   onCreateSession: (name: string) => void;
   onDeleteSession: (e: React.MouseEvent, id: string) => void;
   activeTab: string;
-  onSelectTab: (tab: 'dashboard' | 'transactions' | 'settings') => void;
-  onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onSelectTab: (tab: 'dashboard' | 'transactions' | 'settings' | 'goals') => void;
+  onImportFile: () => void;
   activeSessionName: string;
   onToggleChat: () => void;
   isChatOpen: boolean;
@@ -161,6 +162,14 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <button 
+          onClick={() => onSelectTab('goals')}
+          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'goals' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+        >
+          <Target size={20} />
+          <span className="font-medium">Goals</span>
+        </button>
+
+        <button 
           onClick={() => onSelectTab('settings')}
           className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
         >
@@ -182,15 +191,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Import Area */}
       <div className="p-4 border-t border-slate-700 bg-slate-900/30">
-        <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-600 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-slate-800 transition-all group">
+        <button 
+            onClick={onImportFile}
+            className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-600 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-slate-800 transition-all group"
+        >
           <div className="flex flex-col items-center justify-center pt-5 pb-6">
             <Upload size={24} className="text-slate-400 group-hover:text-indigo-400 mb-2" />
             <p className="text-xs text-slate-500 group-hover:text-slate-300 text-center px-2">
                Import to<br/><span className="font-semibold text-indigo-400">{activeSessionName}</span>
             </p>
           </div>
-          <input type="file" className="hidden" accept=".xlsx, .csv, .txt" onChange={onImportFile} />
-        </label>
+        </button>
       </div>
     </nav>
   );

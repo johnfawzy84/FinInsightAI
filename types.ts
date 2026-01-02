@@ -73,6 +73,16 @@ export interface Asset {
   color: string;
 }
 
+export interface Goal {
+  id: string;
+  title: string;
+  targetAmount: number;
+  allocatedAmount: number;
+  targetDate: string;
+  priority: number; // 1 (Low) to 5 (Critical)
+  icon: string; // Emoji or icon name
+}
+
 export interface DashboardWidget {
   id: string;
   type: 'net-worth' | 'assets' | 'cash-flow' | 'spending' | 'sankey' | 'custom';
@@ -92,6 +102,7 @@ export interface Session {
   categories: string[];
   rules: CategorizationRule[];
   assets: Asset[];
+  goals: Goal[];
   dashboardWidgets: DashboardWidget[];
   createdAt: number;
   importSettings: ImportSettings;
@@ -103,4 +114,13 @@ export interface ImportSelection {
   rules: boolean;
   assets: boolean;
   dashboard: boolean;
+  goals: boolean;
+}
+
+export interface ColumnMapping {
+  dateIndex: number;
+  descriptionIndex: number;
+  amountIndex: number;
+  categoryIndex: number; // -1 if not present
+  typeIndex: number; // -1 if not present
 }

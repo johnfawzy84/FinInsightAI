@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection } from '../types';
+import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection, Goal } from '../types';
 
 // Helper for synchronous rule application
 export const applyRulesToTransactions = (transactions: Transaction[], rules: CategorizationRule[]): Transaction[] => {
@@ -45,6 +45,11 @@ export const useSessionData = () => {
     { id: 'a3', name: 'Investment Portfolio', value: 15000, type: 'Stock', color: '#6366f1' },
   ];
 
+  const initialGoals: Goal[] = [
+    { id: 'g1', title: 'Summer Vacation', targetAmount: 2000, allocatedAmount: 500, targetDate: '2024-07-01', priority: 3, icon: '✈️' },
+    { id: 'g2', title: 'New Laptop', targetAmount: 1500, allocatedAmount: 1500, targetDate: '2024-02-01', priority: 5, icon: '💻' }
+  ];
+
   const defaultWidgets: DashboardWidget[] = [
     { id: 'w-networth', type: 'net-worth', title: 'Net Worth Trend', visible: true, width: 'full' },
     { id: 'w-assets', type: 'assets', title: 'Assets', visible: true, width: 'half' },
@@ -61,6 +66,7 @@ export const useSessionData = () => {
       categories: [...DEFAULT_CATEGORIES],
       rules: [],
       assets: initialAssets,
+      goals: initialGoals,
       dashboardWidgets: defaultWidgets,
       createdAt: Date.now(),
       importSettings: defaultSettings
@@ -80,6 +86,7 @@ export const useSessionData = () => {
       categories: [...DEFAULT_CATEGORIES],
       rules: [],
       assets: [],
+      goals: [],
       dashboardWidgets: [...defaultWidgets],
       createdAt: Date.now(),
       importSettings: { ...defaultSettings }
@@ -104,6 +111,8 @@ export const useSessionData = () => {
         name: sessionData.name ? `${sessionData.name} (Imported)` : 'Imported Session',
         // Ensure widgets exist if importing older version
         dashboardWidgets: sessionData.dashboardWidgets || [...defaultWidgets],
+        // Ensure goals exist if importing older version
+        goals: sessionData.goals || [],
         createdAt: Date.now()
     };
     setSessions(prev => [...prev, newSession]);
@@ -159,11 +168,6 @@ export const useSessionData = () => {
          const existingWidgets = s.dashboardWidgets || [];
          const incomingWidgets = incomingData.dashboardWidgets || [];
          
-         // Logic: Keep existing standard widgets, append new custom widgets
-         // If standard widgets in import have different visibility, should we respect that? 
-         // Let's assume user wants to import the *configuration* of the dashboard.
-         // Strategy: Update visibility of standard widgets, Append custom widgets.
-         
          const standardTypes = ['net-worth', 'assets', 'cash-flow', 'spending', 'sankey'];
          
          const updatedWidgets = existingWidgets.map(w => {
@@ -179,6 +183,13 @@ export const useSessionData = () => {
             .map(iw => ({ ...iw, id: `imported-widget-${Date.now()}-${Math.random()}` })); // Regen ID to avoid conflict
 
          merged.dashboardWidgets = [...updatedWidgets, ...newCustomWidgets];
+      }
+
+      // 6. Merge Goals (Append new goals)
+      if (selection.goals) {
+         const incomingGoals = incomingData.goals || [];
+         const newGoals = incomingGoals.map(g => ({ ...g, id: `imported-goal-${Date.now()}-${Math.random()}` }));
+         merged.goals = [...(s.goals || []), ...newGoals];
       }
 
       return merged;
@@ -214,6 +225,10 @@ export const useSessionData = () => {
   const updateAssets = (updater: (assets: Asset[]) => Asset[]) => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, assets: updater(s.assets || []) } : s));
   };
+  
+  const updateGoals = (updater: (goals: Goal[]) => Goal[]) => {
+    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, goals: updater(s.goals || []) } : s));
+  };
 
   const updateDashboardWidgets = (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, dashboardWidgets: updater(s.dashboardWidgets || []) } : s));
@@ -238,6 +253,7 @@ export const useSessionData = () => {
     updateCategories,
     updateRules,
     updateAssets,
+    updateGoals,
     updateDashboardWidgets,
     updateSessionRaw
   };

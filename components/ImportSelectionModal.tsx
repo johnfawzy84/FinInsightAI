@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Session, ImportSelection } from '../types';
-import { Download, CheckCircle, X, List, Zap, PieChart, Layout } from 'lucide-react';
+import { Download, CheckCircle, X, List, Zap, PieChart, Layout, Target } from 'lucide-react';
 
 interface ImportSelectionModalProps {
   importData: Session;
@@ -14,7 +14,8 @@ export const ImportSelectionModal: React.FC<ImportSelectionModalProps> = ({ impo
     categories: true,
     rules: true,
     assets: true,
-    dashboard: true
+    dashboard: true,
+    goals: true
   });
 
   const handleToggle = (key: keyof ImportSelection) => {
@@ -107,6 +108,23 @@ export const ImportSelectionModal: React.FC<ImportSelectionModalProps> = ({ impo
               </div>
             </div>
             {selection.assets && <CheckCircle className="text-indigo-400" size={20} />}
+          </div>
+          
+           {/* Goals */}
+          <div 
+            onClick={() => handleToggle('goals')}
+            className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${selection.goals ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${selection.goals ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                <Target size={20} />
+              </div>
+              <div>
+                <h4 className={`font-semibold ${selection.goals ? 'text-white' : 'text-slate-400'}`}>Goals</h4>
+                <p className="text-xs text-slate-500">{getCount('goals')} items found</p>
+              </div>
+            </div>
+            {selection.goals && <CheckCircle className="text-indigo-400" size={20} />}
           </div>
 
           {/* Dashboard */}
