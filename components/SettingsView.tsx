@@ -24,7 +24,8 @@ import {
   EyeOff,
   Sparkles,
   Loader2,
-  Save
+  Save,
+  Database
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 
@@ -42,6 +43,7 @@ interface SettingsViewProps {
   onSanitizeCategories: () => void;
   onUpdateDashboardWidgets: (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => void;
   transactions: Transaction[];
+  onDeleteSource: (sourceName: string) => void;
 }
 
 // Reusable Chart Renderer (Simplified for Preview)
@@ -73,7 +75,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   isGeneratingRules,
   onSanitizeCategories,
   onUpdateDashboardWidgets,
-  transactions
+  transactions,
+  onDeleteSource
 }) => {
   // Local State
   const [editingCategory, setEditingCategory] = useState<{ oldName: string, newName: string } | null>(null);
@@ -190,6 +193,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     }
     setEditingCategory(null);
   };
+  
+  // Source Handler
+  const handleDeleteSource = (sourceName: string) => {
+      const count = transactions.filter(t => t.source === sourceName).length;
+      if (confirm(`Are you sure you want to delete source "${sourceName}"? \n\nThis will permanently delete ${count} associated transactions.`)) {
+          onDeleteSource(sourceName);
+      }
+  };
 
   return (
     <div className="bg-surface rounded-xl border border-slate-700 p-6 max-w-4xl animate-fade-in space-y-8">
@@ -233,6 +244,41 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                          <button onClick={() => onUpdateSettings({ decimalSeparator: ',' })} className={`px-3 py-2 rounded border text-sm ${activeSession.importSettings.decimalSeparator === ',' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>1.234,56</button>
                          <button onClick={() => onUpdateSettings({ decimalSeparator: '.' })} className={`px-3 py-2 rounded border text-sm ${activeSession.importSettings.decimalSeparator === '.' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>1,234.56</button>
                     </div>
+                </div>
+            </div>
+        </div>
+        
+        {/* Source Management */}
+        <div className="border-t border-slate-700 pt-6">
+            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Database size={24} className="text-cyan-400"/>
+                Data Sources
+            </h2>
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                <p className="text-sm text-slate-400 mb-4">Manage your import sources. Deleting a source removes all its transactions.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {activeSession.sources && activeSession.sources.length > 0 ? (
+                        activeSession.sources.map(source => {
+                            const count = transactions.filter(t => t.source === source).length;
+                            return (
+                                <div key={source} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700 group">
+                                    <div>
+                                        <div className="text-white text-sm font-medium">{source}</div>
+                                        <div className="text-xs text-slate-500">{count} transactions</div>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleDeleteSource(source)}
+                                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded transition-colors"
+                                        title="Delete Source & Data"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <p className="text-slate-500 text-sm col-span-3">No specific sources defined yet.</p>
+                    )}
                 </div>
             </div>
         </div>

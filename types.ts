@@ -38,6 +38,7 @@ export interface Transaction {
   amount: number;
   type: TransactionType;
   category: string; // String to allow AI flexibility, but roughly maps to Category enum
+  source?: string; // Identifier for the import source (e.g., "Chase Checking", "Manual")
 }
 
 export interface CategorizationRule {
@@ -73,14 +74,22 @@ export interface Asset {
   color: string;
 }
 
+export interface SavingRule {
+  amount: number;
+  frequency: 'monthly' | 'once' | 'custom'; // Simple rule
+}
+
 export interface Goal {
   id: string;
+  type: 'GOAL' | 'POCKET'; // GOAL = Wishlist (Spend later), POCKET = Reserve (Hold indefinitely/Emergency)
   title: string;
   targetAmount: number;
   allocatedAmount: number;
-  targetDate: string;
+  targetDate: string; // For POCKET, this might just be a "review date"
   priority: number; // 1 (Low) to 5 (Critical)
-  icon: string; // Emoji or icon name
+  icon: string; 
+  quickAdjustStep?: number; // Configurable +/- amount (e.g., 100)
+  savingRule?: SavingRule; // Defined saving strategy
 }
 
 export interface DashboardWidget {
@@ -103,6 +112,7 @@ export interface Session {
   rules: CategorizationRule[];
   assets: Asset[];
   goals: Goal[];
+  sources: string[]; // List of available import sources
   dashboardWidgets: DashboardWidget[];
   createdAt: number;
   importSettings: ImportSettings;

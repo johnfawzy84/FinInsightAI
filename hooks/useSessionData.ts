@@ -31,12 +31,12 @@ export const useSessionData = () => {
   };
 
   const initialTransactions: Transaction[] = [
-    { id: '1', date: '2023-10-01', description: 'Monthly Salary', amount: 5000, type: TransactionType.INCOME, category: Category.INCOME },
-    { id: '2', date: '2023-10-02', description: 'Rent Payment', amount: 1500, type: TransactionType.EXPENSE, category: Category.HOUSING },
-    { id: '3', date: '2023-10-05', description: 'Grocery Store', amount: 150, type: TransactionType.EXPENSE, category: Category.FOOD },
-    { id: '4', date: '2023-10-06', description: 'Uber Trip', amount: 25, type: TransactionType.EXPENSE, category: Category.TRANSPORT },
-    { id: '5', date: '2023-10-08', description: 'Netflix Subscription', amount: 15, type: TransactionType.EXPENSE, category: Category.ENTERTAINMENT },
-    { id: '6', date: '2023-10-10', description: 'Electric Bill', amount: 120, type: TransactionType.EXPENSE, category: Category.UTILITIES },
+    { id: '1', date: '2023-10-01', description: 'Monthly Salary', amount: 5000, type: TransactionType.INCOME, category: Category.INCOME, source: 'Manual Entry' },
+    { id: '2', date: '2023-10-02', description: 'Rent Payment', amount: 1500, type: TransactionType.EXPENSE, category: Category.HOUSING, source: 'Manual Entry' },
+    { id: '3', date: '2023-10-05', description: 'Grocery Store', amount: 150, type: TransactionType.EXPENSE, category: Category.FOOD, source: 'Manual Entry' },
+    { id: '4', date: '2023-10-06', description: 'Uber Trip', amount: 25, type: TransactionType.EXPENSE, category: Category.TRANSPORT, source: 'Manual Entry' },
+    { id: '5', date: '2023-10-08', description: 'Netflix Subscription', amount: 15, type: TransactionType.EXPENSE, category: Category.ENTERTAINMENT, source: 'Manual Entry' },
+    { id: '6', date: '2023-10-10', description: 'Electric Bill', amount: 120, type: TransactionType.EXPENSE, category: Category.UTILITIES, source: 'Manual Entry' },
   ];
 
   const initialAssets: Asset[] = [
@@ -46,8 +46,8 @@ export const useSessionData = () => {
   ];
 
   const initialGoals: Goal[] = [
-    { id: 'g1', title: 'Summer Vacation', targetAmount: 2000, allocatedAmount: 500, targetDate: '2024-07-01', priority: 3, icon: '✈️' },
-    { id: 'g2', title: 'New Laptop', targetAmount: 1500, allocatedAmount: 1500, targetDate: '2024-02-01', priority: 5, icon: '💻' }
+    { id: 'g1', type: 'GOAL', title: 'Summer Vacation', targetAmount: 2000, allocatedAmount: 500, targetDate: '2024-07-01', priority: 3, icon: '✈️' },
+    { id: 'g2', type: 'GOAL', title: 'New Laptop', targetAmount: 1500, allocatedAmount: 1500, targetDate: '2024-02-01', priority: 5, icon: '💻' }
   ];
 
   const defaultWidgets: DashboardWidget[] = [
@@ -67,6 +67,7 @@ export const useSessionData = () => {
       rules: [],
       assets: initialAssets,
       goals: initialGoals,
+      sources: ['Manual Entry'],
       dashboardWidgets: defaultWidgets,
       createdAt: Date.now(),
       importSettings: defaultSettings
@@ -87,6 +88,7 @@ export const useSessionData = () => {
       rules: [],
       assets: [],
       goals: [],
+      sources: [],
       dashboardWidgets: [...defaultWidgets],
       createdAt: Date.now(),
       importSettings: { ...defaultSettings }
@@ -113,22 +115,20 @@ export const useSessionData = () => {
         dashboardWidgets: sessionData.dashboardWidgets || [...defaultWidgets],
         // Ensure goals exist if importing older version
         goals: sessionData.goals || [],
+        // Ensure sources exist
+        sources: sessionData.sources || ['Imported'],
         createdAt: Date.now()
     };
     setSessions(prev => [...prev, newSession]);
     setActiveSessionId(newSession.id);
   };
 
-  /**
-   * Merges imported data into the active session based on user selection.
-   */
   const mergeSession = (incomingData: Session, selection: ImportSelection) => {
     setSessions(prev => prev.map(s => {
       if (s.id !== activeSessionId) return s;
 
       const merged = { ...s };
 
-      // 1. Merge Categories (Unique union)
       if (selection.categories) {
         const currentCats = s.categories || [];
         const incomingCats = incomingData.categories || [];
@@ -136,7 +136,6 @@ export const useSessionData = () => {
         merged.categories = Array.from(newCats);
       }
 
-      // 2. Merge Rules (Avoid duplicate keywords)
       if (selection.rules) {
         const currentRules = s.rules || [];
         const existingKeywords = new Set(currentRules.map(r => r.keyword.toLowerCase()));
@@ -145,7 +144,6 @@ export const useSessionData = () => {
         merged.rules = [...currentRules, ...rulesToAdd];
       }
 
-      // 3. Merge Transactions (Avoid duplicate IDs, though usually IDs are unique per session)
       if (selection.transactions) {
         const currentTx = s.transactions || [];
         const existingIds = new Set(currentTx.map(t => t.id));
@@ -154,22 +152,16 @@ export const useSessionData = () => {
         merged.transactions = [...currentTx, ...txToAdd];
       }
 
-      // 4. Merge Assets (Append new assets)
       if (selection.assets) {
-         // Optionally check for name duplicates or just append
-         // Here we simply append to avoid data loss, user can delete duplicates
          const incomingAssets = incomingData.assets || [];
          const newAssets = incomingAssets.map(a => ({ ...a, id: `imported-asset-${Date.now()}-${Math.random()}` }));
          merged.assets = [...(s.assets || []), ...newAssets];
       }
 
-      // 5. Merge Dashboard (Add custom widgets)
       if (selection.dashboard) {
          const existingWidgets = s.dashboardWidgets || [];
          const incomingWidgets = incomingData.dashboardWidgets || [];
-         
          const standardTypes = ['net-worth', 'assets', 'cash-flow', 'spending', 'sankey'];
-         
          const updatedWidgets = existingWidgets.map(w => {
             const match = incomingWidgets.find(iw => iw.type === w.type);
             if (match && standardTypes.includes(w.type)) {
@@ -177,15 +169,12 @@ export const useSessionData = () => {
             }
             return w;
          });
-
          const newCustomWidgets = incomingWidgets
             .filter(iw => iw.type === 'custom')
-            .map(iw => ({ ...iw, id: `imported-widget-${Date.now()}-${Math.random()}` })); // Regen ID to avoid conflict
-
+            .map(iw => ({ ...iw, id: `imported-widget-${Date.now()}-${Math.random()}` })); 
          merged.dashboardWidgets = [...updatedWidgets, ...newCustomWidgets];
       }
 
-      // 6. Merge Goals (Append new goals)
       if (selection.goals) {
          const incomingGoals = incomingData.goals || [];
          const newGoals = incomingGoals.map(g => ({ ...g, id: `imported-goal-${Date.now()}-${Math.random()}` }));
@@ -196,7 +185,6 @@ export const useSessionData = () => {
     }));
   };
 
-  // Updaters
   const updateTransactions = (updater: (currentTransactions: Transaction[]) => Transaction[]) => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, transactions: updater(s.transactions) } : s));
   };
@@ -234,9 +222,20 @@ export const useSessionData = () => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, dashboardWidgets: updater(s.dashboardWidgets || []) } : s));
   };
 
-  // Raw Session Updater (for complex batch operations involving multiple fields)
   const updateSessionRaw = (updater: (session: Session) => Session) => {
      setSessions(prev => prev.map(s => s.id === activeSessionId ? updater(s) : s));
+  };
+  
+  // Specific Source Management
+  const deleteSource = (sourceName: string) => {
+    setSessions(prev => prev.map(s => {
+        if (s.id !== activeSessionId) return s;
+        // Remove source from list
+        const newSources = s.sources.filter(src => src !== sourceName);
+        // Remove transactions linked to this source
+        const newTransactions = s.transactions.filter(t => t.source !== sourceName);
+        return { ...s, sources: newSources, transactions: newTransactions };
+    }));
   };
 
   return {
@@ -255,6 +254,7 @@ export const useSessionData = () => {
     updateAssets,
     updateGoals,
     updateDashboardWidgets,
-    updateSessionRaw
+    updateSessionRaw,
+    deleteSource
   };
 };

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
-import { ArrowUpRight, ArrowDownLeft, ChevronDown, X, Filter } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ChevronDown, X, Filter, Tag } from 'lucide-react';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -19,14 +19,18 @@ const TransactionList: React.FC<TransactionListProps> = ({
     date: '',
     description: '',
     category: '',
-    amount: ''
+    amount: '',
+    source: ''
   });
+
+  const availableSources = useMemo(() => Array.from(new Set(transactions.map(t => t.source || 'Unknown'))), [transactions]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const matchDate = t.date.toLowerCase().includes(filters.date.toLowerCase());
       const matchDesc = t.description.toLowerCase().includes(filters.description.toLowerCase());
       const matchCat = filters.category === '' || t.category === filters.category;
+      const matchSource = filters.source === '' || (t.source || 'Unknown') === filters.source;
       
       let matchAmount = true;
       if (filters.amount) {
@@ -53,12 +57,12 @@ const TransactionList: React.FC<TransactionListProps> = ({
          }
       }
 
-      return matchDate && matchDesc && matchCat && matchAmount;
+      return matchDate && matchDesc && matchCat && matchAmount && matchSource;
     });
   }, [transactions, filters]);
 
   const clearFilters = () => {
-    setFilters({ date: '', description: '', category: '', amount: '' });
+    setFilters({ date: '', description: '', category: '', amount: '', source: '' });
   };
 
   const hasActiveFilters = Object.values(filters).some(Boolean);
@@ -99,7 +103,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                       />
                   </div>
               </th>
-              <th className="px-6 py-4 min-w-[250px] align-top">
+              <th className="px-6 py-4 min-w-[200px] align-top">
                   <div className="flex flex-col space-y-2">
                       <span className="flex items-center gap-1">Description <Filter size={10} className="text-slate-500"/></span>
                       <input 
@@ -109,6 +113,22 @@ const TransactionList: React.FC<TransactionListProps> = ({
                         onChange={e => setFilters({...filters, description: e.target.value})}
                         className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-normal normal-case placeholder-slate-600"
                       />
+                  </div>
+              </th>
+              <th className="px-6 py-4 min-w-[140px] align-top">
+                  <div className="flex flex-col space-y-2">
+                      <span className="flex items-center gap-1">Source <Filter size={10} className="text-slate-500"/></span>
+                      <div className="relative">
+                        <select
+                            value={filters.source}
+                            onChange={e => setFilters({...filters, source: e.target.value})}
+                            className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-normal normal-case appearance-none cursor-pointer"
+                        >
+                            <option value="">All Sources</option>
+                            {availableSources.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <ChevronDown size={12} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
                   </div>
               </th>
               <th className="px-6 py-4 min-w-[180px] align-top">
@@ -144,7 +164,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
           <tbody className="divide-y divide-slate-700">
             {filteredTransactions.length === 0 ? (
                 <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                         {transactions.length === 0 
                             ? "No transactions available." 
                             : "No transactions match your filters."}
@@ -158,7 +178,14 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     className="hover:bg-slate-800/50 transition-colors group cursor-pointer"
                 >
                     <td className="px-6 py-4 whitespace-nowrap text-slate-300 font-mono text-xs">{t.date}</td>
-                    <td className="px-6 py-4 font-medium text-white">{t.description}</td>
+                    <td className="px-6 py-4 font-medium text-white">
+                        <div>{t.description}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                         <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded border border-slate-700">
+                             {t.source || 'Unknown'}
+                         </span>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="relative inline-block w-full max-w-[200px]" onClick={(e) => e.stopPropagation()}>
                         <select

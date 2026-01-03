@@ -114,6 +114,63 @@ export const generateRulesFromHistory = async (
 };
 
 /**
+ * Predicts recurring and fixed expenses for the current month based on history.
+ */
+export const predictRecurringExpenses = async (
+  transactions: Transaction[]
+): Promise<{ total: number; breakdown: { category: string; amount: number; reason: string }[] }> => {
+  if (transactions.length < 5) return { total: 0, breakdown: [] };
+
+  // Get last 3 months of expenses
+  const today = new Date();
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(today.getMonth() - 3);
+  
+  const recentExpenses = transactions.filter(t => 
+    t.type === 'EXPENSE' && new Date(t.date) >= threeMonthsAgo
+  );
+
+  const prompt = `
+    Analyze these recent expenses to predict the "Fixed/Regular" spending for the CURRENT month.
+    
+    Include:
+    1. Recurring bills (Rent, Internet, Subscriptions, Insurance).
+    2. Estimated essential variable costs (Groceries, Fuel/Transport) based on monthly averages.
+    3. Estimated Tax or Banking fees.
+    
+    Do NOT include:
+    - One-off purchases (Vacations, Electronics, Large Gifts).
+    
+    Return JSON:
+    {
+      "breakdown": [
+        { "category": "Housing", "amount": 1500, "reason": "Monthly Rent" },
+        { "category": "Food", "amount": 400, "reason": "Avg monthly grocery spend" }
+      ],
+      "total": 1900
+    }
+
+    Data:
+    ${JSON.stringify(recentExpenses.map(t => ({ d: t.date, desc: t.description, amt: t.amount, cat: t.category })))}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    return JSON.parse(response.text || '{"total": 0, "breakdown": []}');
+  } catch (error) {
+    console.error("Error predicting expenses:", error);
+    return { total: 0, breakdown: [] };
+  }
+};
+
+/**
  * Performs deep financial analysis using Gemini 3 Pro with Thinking Mode.
  */
 export const analyzeFinancesDeeply = async (

@@ -3,15 +3,16 @@ import { ImportSettings, ColumnMapping, Transaction, CategorizationRule, Categor
 import { readCsvPreview, parseMappedData } from '../utils/parser';
 import { categorizeTransactionsAI } from '../services/gemini';
 import { applyRulesToTransactions } from '../hooks/useSessionData';
-import { Upload, ArrowRight, Settings, CheckCircle, AlertTriangle, Loader2, FileText, ChevronRight, Wand2, X, Download, BrainCircuit } from 'lucide-react';
+import { Upload, ArrowRight, Settings, CheckCircle, AlertTriangle, Loader2, FileText, ChevronRight, Wand2, X, Download, BrainCircuit, Tag } from 'lucide-react';
 
 interface SmartImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportComplete: (transactions: Transaction[], newCategories: string[]) => void;
+  onImportComplete: (transactions: Transaction[], newCategories: string[], source: string) => void;
   existingRules: CategorizationRule[];
   existingCategories: string[];
   defaultSettings: ImportSettings;
+  existingSources: string[];
 }
 
 type ImportStep = 'upload' | 'mapping' | 'processing' | 'results';
@@ -22,12 +23,14 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
   onImportComplete,
   existingRules,
   existingCategories,
-  defaultSettings
+  defaultSettings,
+  existingSources
 }) => {
   const [step, setStep] = useState<ImportStep>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [rawPreview, setRawPreview] = useState<{ headers: string[], rows: string[][] } | null>(null);
   const [settings, setSettings] = useState<ImportSettings>(defaultSettings);
+  const [sourceName, setSourceName] = useState('');
   
   const [mapping, setMapping] = useState<ColumnMapping>({
     dateIndex: -1,
@@ -54,6 +57,7 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
         setRawPreview(null);
         setResult({ success: [], failed: [] });
         setResolvedFailed([]);
+        setSourceName('');
     }
   }, [isOpen]);
 
@@ -77,6 +81,9 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
         setRawPreview({ headers, rows: preview });
         guessMapping(headers, preview);
         setStep('mapping');
+        // Auto-suggest source name from filename
+        const suggested = selectedFile.name.split('.')[0].replace(/[-_]/g, ' ');
+        setSourceName(suggested);
       } catch (err) {
         alert("Could not read file. Please check format.");
       }
@@ -88,7 +95,6 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
     try {
         const { headers, preview } = await readCsvPreview(file, settings.delimiter);
         setRawPreview({ headers, rows: preview });
-        // Don't re-guess mapping if user manually changed settings, unless columns changed size drastically
     } catch (err) {
         console.error(err);
     }
@@ -121,7 +127,10 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
   };
 
   const handleStartProcessing = async () => {
-      if (!file || !rawPreview) return;
+      if (!file || !rawPreview || !sourceName.trim()) {
+          if (!sourceName.trim()) alert("Please identify the source of these transactions (e.g. 'Chase Checking').");
+          return;
+      }
       setStep('processing');
       setProcessStatus({ current: 'Parsing File...', progress: 10, aiCount: 0 });
 
@@ -139,7 +148,6 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
           transactions = applyRulesToTransactions(transactions, existingRules);
 
           // 4. Identify transactions needing AI
-          // Needs AI if: Category is 'Uncategorized' AND we didn't map a category column (or mapped column was empty)
           const needsAi = transactions.filter(t => t.category === Category.UNCATEGORIZED || t.category === 'Uncategorized');
           
           if (needsAi.length > 0) {
@@ -236,8 +244,24 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
                 {step === 'mapping' && rawPreview && (
                     <div className="space-y-6">
                         {/* Settings Bar */}
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-wrap gap-4 items-end">
-                             <div className="flex-1 min-w-[150px]">
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                             <div className="md:col-span-1">
+                                <label className="text-xs text-slate-400 font-semibold uppercase block mb-1 flex items-center gap-1">
+                                    <Tag size={12}/> Import Source
+                                </label>
+                                <input 
+                                    type="text"
+                                    list="source-suggestions"
+                                    value={sourceName}
+                                    onChange={(e) => setSourceName(e.target.value)}
+                                    placeholder="e.g. Chase Checking"
+                                    className="w-full bg-slate-900 border border-indigo-500/50 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                                />
+                                <datalist id="source-suggestions">
+                                    {existingSources.map(s => <option key={s} value={s} />)}
+                                </datalist>
+                             </div>
+                             <div>
                                 <label className="text-xs text-slate-400 font-semibold uppercase block mb-1">Delimiter</label>
                                 <select 
                                     value={settings.delimiter}
@@ -250,7 +274,7 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
                                     <option value="\t">Tab</option>
                                 </select>
                              </div>
-                             <div className="flex-1 min-w-[150px]">
+                             <div>
                                 <label className="text-xs text-slate-400 font-semibold uppercase block mb-1">Date Format</label>
                                 <select 
                                     value={settings.dateFormat}
@@ -262,7 +286,7 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
                                     <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                                 </select>
                              </div>
-                             <div className="flex-1 min-w-[150px]">
+                             <div>
                                 <label className="text-xs text-slate-400 font-semibold uppercase block mb-1">Decimal</label>
                                 <select 
                                     value={settings.decimalSeparator}
@@ -346,7 +370,7 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
                             <button onClick={() => setStep('upload')} className="px-4 py-2 text-slate-400 hover:text-white">Back</button>
                             <button 
                                 onClick={handleStartProcessing}
-                                disabled={mapping.dateIndex === -1 || mapping.amountIndex === -1}
+                                disabled={mapping.dateIndex === -1 || mapping.amountIndex === -1 || !sourceName.trim()}
                                 className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"
                             >
                                 Process Data <ArrowRight size={16} />
@@ -404,6 +428,14 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
                             </div>
                         </div>
 
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                            <div className="flex items-center gap-2 mb-2 text-slate-300">
+                                <Tag size={16} className="text-indigo-400"/> 
+                                <span className="text-sm font-semibold">Importing as source:</span>
+                                <span className="text-white font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-600">{sourceName}</span>
+                            </div>
+                        </div>
+
                         {/* Failed List */}
                         {result.failed.length > 0 && (
                             <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
@@ -440,7 +472,7 @@ export const SmartImportModal: React.FC<SmartImportModalProps> = ({
                                 onClick={() => {
                                     const newCats = Array.from(new Set(result.success.map(t => t.category)))
                                         .filter(c => !existingCategories.includes(c) && c !== Category.UNCATEGORIZED && c !== 'Uncategorized');
-                                    onImportComplete(result.success, newCats);
+                                    onImportComplete(result.success, newCats, sourceName);
                                     onClose();
                                 }}
                                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20"

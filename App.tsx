@@ -37,7 +37,8 @@ const App: React.FC = () => {
     updateAssets,
     updateGoals,
     updateDashboardWidgets,
-    updateSessionRaw
+    updateSessionRaw,
+    deleteSource
   } = useSessionData();
 
   // UI Local State
@@ -139,11 +140,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSmartImportComplete = (newTransactions: Transaction[], newCategories: string[]) => {
+  const handleSmartImportComplete = (newTransactions: Transaction[], newCategories: string[], source: string) => {
+      // 1. Tag transactions with the source
+      const taggedTransactions = newTransactions.map(t => ({ ...t, source }));
+      
+      // 2. Add source to session sources list if new
+      const currentSources = activeSession.sources || [];
+      const updatedSources = currentSources.includes(source) ? currentSources : [...currentSources, source];
+
       updateSessionRaw(s => ({
           ...s,
           categories: [...s.categories, ...newCategories],
-          transactions: [...s.transactions, ...newTransactions]
+          transactions: [...s.transactions, ...taggedTransactions],
+          sources: updatedSources
       }));
       setActiveTab('transactions');
   };
@@ -374,6 +383,7 @@ const App: React.FC = () => {
             existingRules={activeSession.rules}
             existingCategories={activeSession.categories}
             defaultSettings={activeSession.importSettings}
+            existingSources={activeSession.sources || []}
         />
 
         <RuleProgressModal 
@@ -531,6 +541,7 @@ const App: React.FC = () => {
                     onSanitizeCategories={handleSanitizeCategories}
                     onUpdateDashboardWidgets={updateDashboardWidgets}
                     transactions={activeSession.transactions}
+                    onDeleteSource={deleteSource}
                 />
             )}
         </main>
