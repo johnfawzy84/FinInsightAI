@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { analyzeFinancesDeeply, chatWithFinanceAssistant } from '../services/gemini';
 import { Transaction } from '../types';
 import { Sparkles, Send, BrainCircuit, Loader2, Bot, X, Globe } from 'lucide-react';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface AIConsultantProps {
   transactions: Transaction[];
@@ -79,6 +81,16 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
     }
   };
 
+  const renderMarkdown = (text: string) => {
+      try {
+          const rawMarkup = marked.parse(text) as string;
+          const cleanMarkup = DOMPurify.sanitize(rawMarkup);
+          return { __html: cleanMarkup };
+      } catch (e) {
+          return { __html: text };
+      }
+  };
+
   return (
     <>
         {/* Mobile Backdrop */}
@@ -143,7 +155,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                     <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap shadow-md ${
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-md ${
                         msg.role === 'user'
                         ? 'bg-indigo-600 text-white rounded-br-none'
                         : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none'
@@ -155,7 +167,25 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
                             <span>Deep Analysis</span>
                         </div>
                     )}
-                    {msg.content}
+                    
+                    {/* Markdown Rendered Content */}
+                    <div 
+                        className={`markdown-body 
+                            [&>h1]:font-bold [&>h1]:text-lg [&>h1]:mb-2 [&>h1]:text-white 
+                            [&>h2]:font-bold [&>h2]:text-base [&>h2]:mb-2 [&>h2]:text-white
+                            [&>h3]:font-bold [&>h3]:text-sm [&>h3]:mb-1 [&>h3]:text-indigo-300
+                            [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2 
+                            [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:mb-2
+                            [&>li]:mb-1
+                            [&>p]:mb-2 last:[&>p]:mb-0
+                            [&>strong]:font-bold [&>strong]:text-white
+                            [&>blockquote]:border-l-2 [&>blockquote]:border-slate-600 [&>blockquote]:pl-3 [&>blockquote]:italic [&>blockquote]:text-slate-400
+                            [&>code]:bg-slate-900 [&>code]:px-1 [&>code]:py-0.5 [&>code]:rounded [&>code]:font-mono [&>code]:text-xs [&>code]:text-indigo-300
+                            [&>pre]:bg-slate-900 [&>pre]:p-2 [&>pre]:rounded-lg [&>pre]:overflow-x-auto [&>pre]:mb-2 [&>pre]:text-xs
+                            [&>a]:text-indigo-400 [&>a]:underline hover:[&>a]:text-indigo-300
+                        `}
+                        dangerouslySetInnerHTML={renderMarkdown(msg.content)}
+                    />
                     
                     {/* Render Search Sources */}
                     {msg.groundingChunks && msg.groundingChunks.length > 0 && (

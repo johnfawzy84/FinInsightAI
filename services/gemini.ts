@@ -114,44 +114,45 @@ export const generateRulesFromHistory = async (
 };
 
 /**
- * Predicts recurring and fixed expenses for the current month based on history.
+ * Predicts recurring income and fixed expenses for the current month.
  */
 export const predictRecurringExpenses = async (
   transactions: Transaction[]
-): Promise<{ total: number; breakdown: { category: string; amount: number; reason: string }[] }> => {
-  if (transactions.length < 5) return { total: 0, breakdown: [] };
+): Promise<{ 
+    total: number; 
+    expectedIncome: number;
+    breakdown: { category: string; amount: number; reason: string; type: 'income' | 'expense' }[] 
+}> => {
+  if (transactions.length < 5) return { total: 0, expectedIncome: 0, breakdown: [] };
 
-  // Get last 3 months of expenses
+  // Get last 3 months of data
   const today = new Date();
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(today.getMonth() - 3);
   
-  const recentExpenses = transactions.filter(t => 
-    t.type === 'EXPENSE' && new Date(t.date) >= threeMonthsAgo
-  );
+  const recentTx = transactions.filter(t => new Date(t.date) >= threeMonthsAgo);
 
   const prompt = `
-    Analyze these recent expenses to predict the "Fixed/Regular" spending for the CURRENT month.
+    Analyze these recent transactions to predict the financial baseline for the CURRENT month.
     
-    Include:
-    1. Recurring bills (Rent, Internet, Subscriptions, Insurance).
-    2. Estimated essential variable costs (Groceries, Fuel/Transport) based on monthly averages.
-    3. Estimated Tax or Banking fees.
+    1. Identify recurring FIXED expenses (Rent, Internet, Insurance, Subscriptions).
+    2. Estimate essential variable costs (Groceries, Fuel) based on monthly averages.
+    3. Identify recurring INCOME (Salary, Dividends, Regular Transfers).
     
-    Do NOT include:
-    - One-off purchases (Vacations, Electronics, Large Gifts).
+    Do NOT include one-off items.
     
     Return JSON:
     {
       "breakdown": [
-        { "category": "Housing", "amount": 1500, "reason": "Monthly Rent" },
-        { "category": "Food", "amount": 400, "reason": "Avg monthly grocery spend" }
+        { "category": "Income", "amount": 5000, "reason": "Monthly Salary", "type": "income" },
+        { "category": "Housing", "amount": 1500, "reason": "Rent", "type": "expense" }
       ],
-      "total": 1900
+      "totalExpenses": 1900,
+      "totalIncome": 5000
     }
 
-    Data:
-    ${JSON.stringify(recentExpenses.map(t => ({ d: t.date, desc: t.description, amt: t.amount, cat: t.category })))}
+    Data (d=date, desc=description, amt=amount, t=type):
+    ${JSON.stringify(recentTx.map(t => ({ d: t.date, desc: t.description, amt: t.amount, t: t.type })))}
   `;
 
   try {
@@ -163,10 +164,15 @@ export const predictRecurringExpenses = async (
       }
     });
 
-    return JSON.parse(response.text || '{"total": 0, "breakdown": []}');
+    const res = JSON.parse(response.text || '{"totalExpenses": 0, "totalIncome": 0, "breakdown": []}');
+    return {
+        total: res.totalExpenses || 0,
+        expectedIncome: res.totalIncome || 0,
+        breakdown: res.breakdown || []
+    };
   } catch (error) {
     console.error("Error predicting expenses:", error);
-    return { total: 0, breakdown: [] };
+    return { total: 0, expectedIncome: 0, breakdown: [] };
   }
 };
 

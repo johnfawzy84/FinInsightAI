@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Goal, Asset, Transaction, TransactionType } from '../types';
 import { predictRecurringExpenses } from '../services/gemini';
-import { Target, Plus, TrendingUp, AlertCircle, CheckCircle, BrainCircuit, X, Trash2, Calendar, Coins, AlertTriangle, Shield, Wallet, Info, ChevronDown, ChevronUp, Loader2, ArrowRight, Edit2, Save } from 'lucide-react';
+import { Target, Plus, TrendingUp, AlertCircle, CheckCircle, BrainCircuit, X, Trash2, Calendar, Coins, AlertTriangle, Shield, Wallet, Info, ChevronDown, ChevronUp, Loader2, ArrowRight, Edit2, Save, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 
 interface GoalManagerProps {
   goals: Goal[];
@@ -12,8 +12,13 @@ interface GoalManagerProps {
 
 export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transactions, onUpdateGoals }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingGoalId, setEditingGoalId] = useState<string | null>(null); // Track if editing
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null); // Track if editing via Modal
   
+  // Inline Editing State
+  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
+  const [inlineValue, setInlineValue] = useState('');
+  const inlineInputRef = useRef<HTMLInputElement>(null);
+
   const defaultGoal: Partial<Goal> = {
     type: 'GOAL',
     title: '',
@@ -29,7 +34,11 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
   const [currentGoal, setCurrentGoal] = useState<Partial<Goal>>(defaultGoal);
 
   // AI State
-  const [recurringExpenses, setRecurringExpenses] = useState<{ total: number; breakdown: { category: string; amount: number; reason: string }[] } | null>(null);
+  const [recurringData, setRecurringData] = useState<{ 
+      total: number; 
+      expectedIncome: number; 
+      breakdown: { category: string; amount: number; reason: string; type: 'income' | 'expense' }[] 
+  } | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
@@ -38,7 +47,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
       const fetchForecast = async () => {
           setIsLoadingAI(true);
           const result = await predictRecurringExpenses(transactions);
-          setRecurringExpenses(result);
+          setRecurringData(result);
           setIsLoadingAI(false);
       };
       if (transactions.length > 0) fetchForecast();
@@ -145,11 +154,6 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
   };
 
   const handleUpdateAllocation = (id: string, amount: number) => {
-    const otherGoalsAllocated = goals.filter(g => g.id !== id).reduce((sum, g) => sum + g.allocatedAmount, 0);
-    const maxAvailable = totalLiquidAssets - otherGoalsAllocated;
-    // Allow user to set allocation even if it exceeds currently liquid assets (shows as negative unallocated), 
-    // but typically we want to clamp. For pockets, let's clamp to 0 minimum.
-    // Ideally we shouldn't allow allocating money we don't have, but for planning:
     const safeAmount = Math.max(0, amount);
     onUpdateGoals(prev => prev.map(g => g.id === id ? { ...g, allocatedAmount: safeAmount } : g));
   };
@@ -158,6 +162,23 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
       const goal = goals.find(g => g.id === id);
       if (!goal) return;
       handleUpdateAllocation(id, goal.allocatedAmount + delta);
+  };
+
+  // Inline Editing Handlers
+  const startInlineEdit = (goal: Goal) => {
+      setInlineEditingId(goal.id);
+      setInlineValue(goal.allocatedAmount.toString());
+      setTimeout(() => inlineInputRef.current?.focus(), 50);
+  };
+
+  const saveInlineEdit = () => {
+      if (inlineEditingId) {
+          const val = parseFloat(inlineValue);
+          if (!isNaN(val)) {
+              handleUpdateAllocation(inlineEditingId, val);
+          }
+      }
+      setInlineEditingId(null);
   };
 
   // Enhanced Feasibility Logic
@@ -272,7 +293,25 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                     </button>
                     <div className="text-center min-w-[80px]">
                         <div className="text-xs text-slate-500 uppercase font-bold">Allocated</div>
-                        <div className="text-white font-mono font-bold">${goal.allocatedAmount.toLocaleString()}</div>
+                        {inlineEditingId === goal.id ? (
+                            <input 
+                                ref={inlineInputRef}
+                                type="number" 
+                                value={inlineValue}
+                                onChange={(e) => setInlineValue(e.target.value)}
+                                onBlur={saveInlineEdit}
+                                onKeyDown={(e) => e.key === 'Enter' && saveInlineEdit()}
+                                className="w-20 bg-slate-800 border border-indigo-500 rounded px-1 py-0.5 text-center text-white font-mono font-bold text-sm focus:outline-none"
+                            />
+                        ) : (
+                            <div 
+                                onClick={() => startInlineEdit(goal)}
+                                className="text-white font-mono font-bold hover:text-indigo-400 cursor-pointer border border-transparent hover:border-slate-700 rounded px-1"
+                                title="Click to edit"
+                            >
+                                ${goal.allocatedAmount.toLocaleString()}
+                            </div>
+                        )}
                     </div>
                     <button 
                         onClick={() => handleQuickAdjust(goal.id, (goal.quickAdjustStep || 100))}
@@ -375,36 +414,52 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                 <span className="text-xs text-slate-500">Actual Surplus</span>
                 <span className={`font-bold ${currentMonthSnapshot.surplus >= 0 ? 'text-white' : 'text-red-400'}`}>${currentMonthSnapshot.surplus.toLocaleString()}</span>
             </div>
-            {recurringExpenses && (
+            {recurringData && (
                 <div className="flex justify-between items-end text-xs pt-1 border-t border-slate-700/50">
                     <span className="text-indigo-400">Expected End</span>
-                    <span className="font-mono">~${(currentMonthSnapshot.income - recurringExpenses.total).toLocaleString()}</span>
+                    <span className="font-mono">~${(currentMonthSnapshot.income - recurringData.total).toLocaleString()}</span>
                 </div>
             )}
         </div>
 
-        {/* 4. AI Recurring Expenses */}
+        {/* 4. AI Monthly Baseline (Income vs Fixed Spend) */}
         <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-5 rounded-xl border border-indigo-500/30 shadow-lg relative overflow-hidden group">
              <div className="flex items-center gap-2 mb-2 text-indigo-300">
                 {isLoadingAI ? <Loader2 size={16} className="animate-spin"/> : <BrainCircuit size={16} />}
-                <h3 className="text-xs font-bold uppercase tracking-wider">Fixed Monthly Spend</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider">Monthly Baseline</h3>
              </div>
              {isLoadingAI ? (
-                 <div className="text-xs text-slate-400">Analyzing recurring bills...</div>
-             ) : recurringExpenses ? (
+                 <div className="text-xs text-slate-400">Analyzing recurring finances...</div>
+             ) : recurringData ? (
                  <>
-                    <div className="text-2xl font-bold text-white mb-1">~${recurringExpenses.total.toLocaleString()}</div>
-                    <div className="text-[10px] text-indigo-200 truncate">
-                        {recurringExpenses.breakdown.length} recurring items identified
+                    <div className="flex justify-between items-end mb-1">
+                        <div>
+                            <div className="text-xs text-slate-400">Fixed Spend</div>
+                            <div className="text-lg font-bold text-red-300">-${recurringData.total.toLocaleString()}</div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-xs text-slate-400">Exp. Income</div>
+                            <div className="text-lg font-bold text-emerald-300">+${recurringData.expectedIncome.toLocaleString()}</div>
+                        </div>
                     </div>
+                    
+                    <div className="pt-2 border-t border-indigo-500/20 mt-1 flex justify-between items-center">
+                        <span className="text-xs text-indigo-200">Baseline Surplus:</span>
+                        <span className={`font-bold ${recurringData.expectedIncome - recurringData.total >= 0 ? 'text-white' : 'text-red-400'}`}>
+                            ${(recurringData.expectedIncome - recurringData.total).toLocaleString()}
+                        </span>
+                    </div>
+
                     {/* Hover Detail View */}
                     <div className="absolute inset-0 bg-slate-900/95 p-4 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 overflow-y-auto">
-                        <h4 className="text-xs font-bold text-white mb-2 uppercase border-b border-slate-700 pb-1">Breakdown</h4>
+                        <h4 className="text-xs font-bold text-white mb-2 uppercase border-b border-slate-700 pb-1">Predictions</h4>
                         <div className="space-y-2">
-                            {recurringExpenses.breakdown.map((item, idx) => (
+                            {recurringData.breakdown.map((item, idx) => (
                                 <div key={idx} className="flex justify-between text-xs">
-                                    <span className="text-slate-400">{item.category}</span>
-                                    <span className="text-white">${item.amount}</span>
+                                    <span className="text-slate-400">{item.category} ({item.reason})</span>
+                                    <span className={`${item.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {item.type === 'income' ? '+' : '-'}${item.amount}
+                                    </span>
                                 </div>
                             ))}
                         </div>
