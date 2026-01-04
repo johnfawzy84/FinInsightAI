@@ -121,7 +121,7 @@ export const useSessionData = () => {
         dashboardWidgets: sessionData.dashboardWidgets || [...defaultWidgets],
         goals: sessionData.goals || [],
         budgets: sessionData.budgets || [],
-        sources: sessionData.sources || ['Imported'],
+        sources: sessionData.sources || [],
         createdAt: Date.now()
     };
     setSessions(prev => [...prev, newSession]);
@@ -155,6 +155,11 @@ export const useSessionData = () => {
         const incomingTx = incomingData.transactions || [];
         const txToAdd = incomingTx.filter(t => !existingIds.has(t.id));
         merged.transactions = [...currentTx, ...txToAdd];
+
+        // Ensure sources from incoming session are added too
+        const incomingSources = incomingData.sources || [];
+        const combinedSources = Array.from(new Set([...(s.sources || []), ...incomingSources]));
+        merged.sources = combinedSources;
       }
 
       if (selection.assets) {

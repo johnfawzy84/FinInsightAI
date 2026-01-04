@@ -2,7 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationRule, Budget } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Always use named parameters and exclusively get the API key from process.env.API_KEY.
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const proposeBudgetsAI = async (
   transactions: Transaction[],
@@ -10,7 +11,8 @@ export const proposeBudgetsAI = async (
 ): Promise<Partial<Budget>[]> => {
   if (transactions.length < 5) return [];
 
-  const recentTx = transactions.slice(-300); // Send recent 300 to give context
+  const ai = getAI();
+  const recentTx = transactions.slice(-300); 
   
   const prompt = `
     Analyze these transactions and propose a monthly budget for each category.
@@ -55,15 +57,13 @@ export const proposeBudgetsAI = async (
   }
 };
 
-/**
- * Auto-categorizes a list of transactions using Gemini Flash for speed.
- */
 export const categorizeTransactionsAI = async (
   transactions: { id: string; description: string; amount: number }[],
   availableCategories: string[]
 ): Promise<{ id: string; category: string }[]> => {
   if (transactions.length === 0) return [];
 
+  const ai = getAI();
   const categoryInstruction = availableCategories.length > 0 
     ? `Classify into one of these exact categories: ${availableCategories.join(', ')}.`
     : `Categorize into standard personal finance categories (e.g., Food, Transport, Utilities).`;
@@ -78,7 +78,7 @@ export const categorizeTransactionsAI = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -111,6 +111,7 @@ export const generateRulesFromHistory = async (
 ): Promise<CategorizationRule[]> => {
   if (transactions.length < 5) return [];
 
+  const ai = getAI();
   const categorized = transactions.filter(t => 
     t.category !== 'Uncategorized' && t.category !== 'General'
   ).slice(0, 100);
@@ -127,7 +128,7 @@ export const generateRulesFromHistory = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -167,6 +168,7 @@ export const predictRecurringExpenses = async (
 }> => {
   if (transactions.length < 5) return { total: 0, expectedIncome: 0, breakdown: [] };
 
+  const ai = getAI();
   const today = new Date();
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(today.getMonth() - 3);
@@ -198,7 +200,7 @@ export const predictRecurringExpenses = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json"
@@ -223,6 +225,7 @@ export const analyzeFinancesDeeply = async (
 ): Promise<{ text: string }> => {
   if (transactions.length === 0) return { text: "No transaction data available for analysis." };
 
+  const ai = getAI();
   const count = transactions.length;
   const startDate = transactions[0].date;
   const endDate = transactions[count - 1].date;
@@ -271,6 +274,7 @@ export const chatWithFinanceAssistant = async (
   transactions: Transaction[]
 ): Promise<{ text: string, groundingChunks?: any[] }> => {
     
+  const ai = getAI();
   const count = transactions.length;
   const startDate = transactions.length > 0 ? transactions[0].date : 'N/A';
   const endDate = transactions.length > 0 ? transactions[count - 1].date : 'N/A';
@@ -328,6 +332,7 @@ export const generateDynamicChart = async (
     transactions: Transaction[],
     userQuery: string
   ): Promise<any> => {
+    const ai = getAI();
     const dataStr = JSON.stringify(transactions.map(t => ({
         d: t.date,
         a: t.amount,
@@ -369,7 +374,7 @@ export const generateDynamicChart = async (
   
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
