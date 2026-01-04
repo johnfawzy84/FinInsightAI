@@ -1,9 +1,59 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction, CategorizationRule } from "../types";
 
-// Initialize Gemini Client
-// CRITICAL: API KEY MUST BE FROM process.env.API_KEY
+import { GoogleGenAI, Type } from "@google/genai";
+import { Transaction, CategorizationRule, Budget } from "../types";
+
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+export const proposeBudgetsAI = async (
+  transactions: Transaction[],
+  availableCategories: string[]
+): Promise<Partial<Budget>[]> => {
+  if (transactions.length < 5) return [];
+
+  const recentTx = transactions.slice(-300); // Send recent 300 to give context
+  
+  const prompt = `
+    Analyze these transactions and propose a monthly budget for each category.
+    Look at historical spending patterns. If a category is volatile, suggest a conservative limit.
+    Available Categories: ${availableCategories.join(', ')}
+
+    Return a JSON array of objects:
+    [
+      { "category": "Food & Dining", "limit": 500, "period": "monthly" },
+      ...
+    ]
+
+    Data:
+    ${JSON.stringify(recentTx.map(t => ({ d: t.date, c: t.category, a: t.amount, t: t.type })))}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              category: { type: Type.STRING },
+              limit: { type: Type.NUMBER },
+              period: { type: Type.STRING }
+            },
+            required: ["category", "limit", "period"]
+          }
+        }
+      }
+    });
+
+    return JSON.parse(response.text || "[]");
+  } catch (error) {
+    console.error("Error proposing budgets:", error);
+    return [];
+  }
+};
 
 /**
  * Auto-categorizes a list of transactions using Gemini Flash for speed.
@@ -14,7 +64,6 @@ export const categorizeTransactionsAI = async (
 ): Promise<{ id: string; category: string }[]> => {
   if (transactions.length === 0) return [];
 
-  // If no categories provided, fallback to generic instruction
   const categoryInstruction = availableCategories.length > 0 
     ? `Classify into one of these exact categories: ${availableCategories.join(', ')}.`
     : `Categorize into standard personal finance categories (e.g., Food, Transport, Utilities).`;
@@ -56,19 +105,15 @@ export const categorizeTransactionsAI = async (
   }
 };
 
-/**
- * Analyzes existing transactions to generate categorization rules.
- */
 export const generateRulesFromHistory = async (
   transactions: Transaction[],
   availableCategories: string[]
 ): Promise<CategorizationRule[]> => {
   if (transactions.length < 5) return [];
 
-  // Filter out uncategorized items to learn from what is already sorted
   const categorized = transactions.filter(t => 
     t.category !== 'Uncategorized' && t.category !== 'General'
-  ).slice(0, 100); // Limit to 100 recent for performance
+  ).slice(0, 100);
 
   const prompt = `
     Analyze these categorized transactions and create strict keyword matching rules.
@@ -113,9 +158,6 @@ export const generateRulesFromHistory = async (
   }
 };
 
-/**
- * Predicts recurring income and fixed expenses for the current month.
- */
 export const predictRecurringExpenses = async (
   transactions: Transaction[]
 ): Promise<{ 
@@ -125,7 +167,6 @@ export const predictRecurringExpenses = async (
 }> => {
   if (transactions.length < 5) return { total: 0, expectedIncome: 0, breakdown: [] };
 
-  // Get last 3 months of data
   const today = new Date();
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(today.getMonth() - 3);
@@ -176,18 +217,13 @@ export const predictRecurringExpenses = async (
   }
 };
 
-/**
- * Performs deep financial analysis using Gemini 3 Pro with Thinking Mode.
- */
 export const analyzeFinancesDeeply = async (
   transactions: Transaction[],
   userQuery: string
 ): Promise<{ text: string }> => {
   if (transactions.length === 0) return { text: "No transaction data available for analysis." };
 
-  // Calculate metadata for grounding
   const count = transactions.length;
-  // Assume sorted by AIConsultant, but safe to grab ends
   const startDate = transactions[0].date;
   const endDate = transactions[count - 1].date;
 
@@ -215,10 +251,9 @@ export const analyzeFinancesDeeply = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", // Use Pro for complex tasks
+      model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
-        // Thinking Budget setup for deep reasoning
         thinkingConfig: { thinkingBudget: 32768 },
       }
     });
@@ -230,22 +265,16 @@ export const analyzeFinancesDeeply = async (
   }
 };
 
-/**
- * Simple chat helper for quick questions using Flash + Google Search.
- */
 export const chatWithFinanceAssistant = async (
   history: { role: 'user' | 'model'; content: string }[],
   currentMessage: string,
   transactions: Transaction[]
 ): Promise<{ text: string, groundingChunks?: any[] }> => {
     
-  // Data Grounding
   const count = transactions.length;
-  // If no transactions, we still allow chat as they might ask general questions via search
   const startDate = transactions.length > 0 ? transactions[0].date : 'N/A';
   const endDate = transactions.length > 0 ? transactions[count - 1].date : 'N/A';
 
-  // Compress data slightly to save tokens while keeping readability
   const dataStr = JSON.stringify(transactions.map(t => ({
       d: t.date,
       desc: t.description,
@@ -273,7 +302,6 @@ export const chatWithFinanceAssistant = async (
   `;
 
   try {
-    // We use gemini-3-flash-preview for the chat to enable search grounding
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [
@@ -282,7 +310,7 @@ export const chatWithFinanceAssistant = async (
         ],
         config: { 
             systemInstruction,
-            tools: [{ googleSearch: {} }] // Enable Google Search
+            tools: [{ googleSearch: {} }]
         }
     });
 
@@ -296,14 +324,10 @@ export const chatWithFinanceAssistant = async (
   }
 };
 
-/**
- * Generates a dynamic chart configuration based on user query and transaction data.
- */
 export const generateDynamicChart = async (
     transactions: Transaction[],
     userQuery: string
   ): Promise<any> => {
-    // Compress data for the prompt
     const dataStr = JSON.stringify(transactions.map(t => ({
         d: t.date,
         a: t.amount,
@@ -349,8 +373,6 @@ export const generateDynamicChart = async (
         contents: prompt,
         config: {
           responseMimeType: "application/json",
-          // Removed responseSchema here because 'data' items have dynamic keys.
-          // Type.OBJECT schema requires non-empty properties, which conflicts with dynamic data structures needed for Recharts.
         }
       });
   

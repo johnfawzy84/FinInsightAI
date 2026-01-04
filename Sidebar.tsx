@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   ShieldCheck, 
@@ -18,7 +17,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
-import { Session } from '../types';
+import { Session } from './types';
 
 interface SidebarProps {
   sessions: Session[];
@@ -65,6 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <nav className={`fixed top-0 left-0 h-full bg-surface border-r border-slate-700 hidden md:flex flex-col z-20 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}>
+      {/* App Logo & Toggle */}
       <div className={`p-6 border-b border-slate-700 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
         {!isCollapsed && (
           <div className="flex items-center space-x-2 text-indigo-400">
@@ -92,6 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
+      {/* Session Management */}
       <div className={`px-4 pt-6 pb-2 border-b border-slate-700/50 overflow-hidden ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
         {!isCollapsed && (
           <div 
@@ -131,10 +132,58 @@ const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </div>
             ))}
+            
+            {!isCollapsed && (
+              isCreatingSession ? (
+                <div className="mt-2 p-2 bg-slate-800 rounded-lg border border-slate-600">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Session Name"
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500 mb-2"
+                    value={newSessionName}
+                    onChange={(e) => setNewSessionName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  />
+                  <div className="flex space-x-1">
+                    <button 
+                      onClick={handleCreate}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-1 rounded"
+                    >
+                      Create
+                    </button>
+                    <button 
+                      onClick={() => setIsCreatingSession(false)}
+                      className="px-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs py-1 rounded"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setIsCreatingSession(true)}
+                  className="w-full flex items-center space-x-2 px-3 py-2 mt-2 text-xs text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors border border-dashed border-slate-700 hover:border-indigo-500/30"
+                >
+                  <Plus size={14} />
+                  <span>New Session</span>
+                </button>
+              )
+            )}
+            {isCollapsed && (
+              <button 
+                onClick={() => { onToggleCollapse(); setIsCreatingSession(true); }}
+                className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors border border-dashed border-slate-700 hover:border-indigo-500/30"
+                title="New Session"
+              >
+                <Plus size={16} />
+              </button>
+            )}
           </div>
         )}
       </div>
 
+      {/* Navigation Links */}
       <div className={`flex-1 py-4 space-y-2 px-4 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
         {[
           { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -171,9 +220,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <MessageSquareText size={20} />
           {!isCollapsed && <span className="font-medium">Consult AI</span>}
+          {isChatOpen && !isCollapsed && <span className="ml-auto w-2 h-2 rounded-full bg-white animate-pulse"></span>}
+          {isChatOpen && isCollapsed && <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>}
         </button>
       </div>
 
+      {/* Import Area */}
       <div className={`p-4 border-t border-slate-700 bg-slate-900/30 ${isCollapsed ? 'flex justify-center' : ''}`}>
         <button 
             onClick={onImportFile}

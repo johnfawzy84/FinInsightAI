@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection, Goal } from '../types';
 
-// Helper for synchronous rule application
+import { useState, useMemo } from 'react';
+import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection, Goal, Budget } from '../types';
+
 export const applyRulesToTransactions = (transactions: Transaction[], rules: CategorizationRule[]): Transaction[] => {
   if (rules.length === 0) return transactions;
   const sortedRules = [...rules].sort((a, b) => b.keyword.length - a.keyword.length);
@@ -9,7 +9,6 @@ export const applyRulesToTransactions = (transactions: Transaction[], rules: Cat
     const matchingRule = sortedRules.find(r => {
       if (r.isRegex) {
         try {
-          // Use safe regex matching (case-insensitive by default)
           const regex = new RegExp(r.keyword, 'i');
           return regex.test(t.description);
         } catch (e) {
@@ -50,10 +49,16 @@ export const useSessionData = () => {
     { id: 'g2', type: 'GOAL', title: 'New Laptop', targetAmount: 1500, allocatedAmount: 1500, targetDate: '2024-02-01', priority: 5, icon: '💻' }
   ];
 
+  const initialBudgets: Budget[] = [
+    { id: 'b1', category: 'Food & Dining', limit: 600, period: 'monthly' },
+    { id: 'b2', category: 'Transportation', limit: 100, period: 'monthly' },
+  ];
+
   const defaultWidgets: DashboardWidget[] = [
     { id: 'w-networth', type: 'net-worth', title: 'Net Worth Trend', visible: true, width: 'full' },
     { id: 'w-assets', type: 'assets', title: 'Assets', visible: true, width: 'half' },
     { id: 'w-cashflow', type: 'cash-flow', title: 'Cash Flow', visible: true, width: 'half' },
+    { id: 'w-recurring', type: 'recurring', title: 'Regular Expenses', visible: true, width: 'half' },
     { id: 'w-spending', type: 'spending', title: 'Spending Categories', visible: true, width: 'half' },
     { id: 'w-sankey', type: 'sankey', title: 'Income to Expense Flow', visible: true, width: 'full' },
   ];
@@ -67,6 +72,7 @@ export const useSessionData = () => {
       rules: [],
       assets: initialAssets,
       goals: initialGoals,
+      budgets: initialBudgets,
       sources: ['Manual Entry'],
       dashboardWidgets: defaultWidgets,
       createdAt: Date.now(),
@@ -88,6 +94,7 @@ export const useSessionData = () => {
       rules: [],
       assets: [],
       goals: [],
+      budgets: [],
       sources: [],
       dashboardWidgets: [...defaultWidgets],
       createdAt: Date.now(),
@@ -111,11 +118,9 @@ export const useSessionData = () => {
         ...sessionData,
         id: `session-${Date.now()}`,
         name: sessionData.name ? `${sessionData.name} (Imported)` : 'Imported Session',
-        // Ensure widgets exist if importing older version
         dashboardWidgets: sessionData.dashboardWidgets || [...defaultWidgets],
-        // Ensure goals exist if importing older version
         goals: sessionData.goals || [],
-        // Ensure sources exist
+        budgets: sessionData.budgets || [],
         sources: sessionData.sources || ['Imported'],
         createdAt: Date.now()
     };
@@ -161,7 +166,7 @@ export const useSessionData = () => {
       if (selection.dashboard) {
          const existingWidgets = s.dashboardWidgets || [];
          const incomingWidgets = incomingData.dashboardWidgets || [];
-         const standardTypes = ['net-worth', 'assets', 'cash-flow', 'spending', 'sankey'];
+         const standardTypes = ['net-worth', 'assets', 'cash-flow', 'spending', 'sankey', 'recurring'];
          const updatedWidgets = existingWidgets.map(w => {
             const match = incomingWidgets.find(iw => iw.type === w.type);
             if (match && standardTypes.includes(w.type)) {
@@ -179,6 +184,12 @@ export const useSessionData = () => {
          const incomingGoals = incomingData.goals || [];
          const newGoals = incomingGoals.map(g => ({ ...g, id: `imported-goal-${Date.now()}-${Math.random()}` }));
          merged.goals = [...(s.goals || []), ...newGoals];
+      }
+
+      if (selection.budgets) {
+        const incomingBudgets = incomingData.budgets || [];
+        const newBudgets = incomingBudgets.map(b => ({ ...b, id: `imported-budget-${Date.now()}-${Math.random()}` }));
+        merged.budgets = [...(s.budgets || []), ...newBudgets];
       }
 
       return merged;
@@ -218,6 +229,10 @@ export const useSessionData = () => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, goals: updater(s.goals || []) } : s));
   };
 
+  const updateBudgets = (updater: (budgets: Budget[]) => Budget[]) => {
+    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, budgets: updater(s.budgets || []) } : s));
+  };
+
   const updateDashboardWidgets = (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => {
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, dashboardWidgets: updater(s.dashboardWidgets || []) } : s));
   };
@@ -226,13 +241,10 @@ export const useSessionData = () => {
      setSessions(prev => prev.map(s => s.id === activeSessionId ? updater(s) : s));
   };
   
-  // Specific Source Management
   const deleteSource = (sourceName: string) => {
     setSessions(prev => prev.map(s => {
         if (s.id !== activeSessionId) return s;
-        // Remove source from list
         const newSources = s.sources.filter(src => src !== sourceName);
-        // Remove transactions linked to this source
         const newTransactions = s.transactions.filter(t => t.source !== sourceName);
         return { ...s, sources: newSources, transactions: newTransactions };
     }));
@@ -253,6 +265,7 @@ export const useSessionData = () => {
     updateRules,
     updateAssets,
     updateGoals,
+    updateBudgets,
     updateDashboardWidgets,
     updateSessionRaw,
     deleteSource

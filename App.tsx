@@ -13,14 +13,15 @@ import { SmartImportModal } from './components/SmartImportModal';
 import { useSessionData, applyRulesToTransactions } from './hooks/useSessionData';
 import { categorizeTransactionsAI, generateRulesFromHistory } from './services/gemini';
 import { parseFile } from './utils/parser';
-import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings, Target } from 'lucide-react';
+import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings, Target, Wallet } from 'lucide-react';
 import { GoalManager } from './components/GoalManager';
+import { BudgetManager } from './components/BudgetManager';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings' | 'goals'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings' | 'goals' | 'budgets'>('dashboard');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // Data State via Custom Hook
   const { 
     sessions, 
     activeSession, 
@@ -36,21 +37,18 @@ const App: React.FC = () => {
     updateRules,
     updateAssets,
     updateGoals,
+    updateBudgets,
     updateDashboardWidgets,
     updateSessionRaw,
     deleteSource
   } = useSessionData();
 
-  // UI Local State
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [isGeneratingRules, setIsGeneratingRules] = useState(false);
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
-  
-  // Import State
   const [importCandidate, setImportCandidate] = useState<Session | null>(null);
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
 
-  // Modal States
   const [bulkUpdateProposal, setBulkUpdateProposal] = useState<{
     targetDescription: string;
     newCategory: string;
@@ -67,15 +65,11 @@ const App: React.FC = () => {
   } | null>(null);
 
   const [sanitizationResult, setSanitizationResult] = useState<{ count: number; categories: string[] } | null>(null);
-  
   const [sanitizationProposal, setSanitizationProposal] = useState<{
     totalCount: number;
     unusedCount: number;
     unusedCategories: string[];
   } | null>(null);
-
-
-  // --- Logic for Modals & Data Operations ---
 
   const derivedTransactionData = useMemo(() => {
     if (!selectedTransactionId) return null;
@@ -118,10 +112,9 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        if (!json.transactions || !Array.isArray(json.transactions) || !json.categories || !Array.isArray(json.categories)) {
+        if (!json.transactions || !Array.isArray(json.transactions)) {
             throw new Error("Invalid file structure");
         }
-        // Instead of importing immediately, set candidate to show selection modal
         setImportCandidate(json);
       } catch (err) {
         console.error(err);
@@ -141,16 +134,13 @@ const App: React.FC = () => {
   };
 
   const handleSmartImportComplete = (newTransactions: Transaction[], newCategories: string[], source: string) => {
-      // 1. Tag transactions with the source
       const taggedTransactions = newTransactions.map(t => ({ ...t, source }));
-      
-      // 2. Add source to session sources list if new
       const currentSources = activeSession.sources || [];
       const updatedSources = currentSources.includes(source) ? currentSources : [...currentSources, source];
 
       updateSessionRaw(s => ({
           ...s,
-          categories: [...s.categories, ...newCategories],
+          categories: Array.from(new Set([...s.categories, ...newCategories])),
           transactions: [...s.transactions, ...taggedTransactions],
           sources: updatedSources
       }));
@@ -228,7 +218,6 @@ const App: React.FC = () => {
   const handleSaveDetails = (transactionId: string, newCategory: string, applyToSimilar: boolean, newRule: { keyword: string, category: string, isRegex: boolean } | null) => {
     let currentRules = [...activeSession.rules];
     if (newRule) {
-        // Remove existing rule if we are "overwriting" based on keyword
         currentRules = currentRules.filter(r => r.keyword !== newRule.keyword.toLowerCase());
         currentRules.push({
             id: `rule-${Date.now()}`,
@@ -244,7 +233,6 @@ const App: React.FC = () => {
         updateTransactions(prev => {
             let nextTransactions = [...prev];
             if (newRule) {
-               // Re-apply all rules including the new one
                nextTransactions = applyRulesToTransactions(nextTransactions, currentRules);
             } else {
                 if (applyToSimilar) {
@@ -292,7 +280,6 @@ const App: React.FC = () => {
     const total = transactions.length;
     setRuleApplicationStatus({ active: true, progress: 0, total, updated: 0, finished: false });
 
-    // Sort rules, handling regex vs normal is tricky but length is a decent proxy for specificity in simple cases
     const sortedRules = rules.sort((a, b) => b.keyword.length - a.keyword.length);
     const BATCH_SIZE = 500;
     const newTransactions: Transaction[] = [];
@@ -303,7 +290,6 @@ const App: React.FC = () => {
         const end = Math.min(i + BATCH_SIZE, total);
         const chunk = transactions.slice(i, end);
         chunk.forEach(t => {
-            // Updated matching logic
             const matchingRule = sortedRules.find(r => {
                 if (r.isRegex) {
                      try { return new RegExp(r.keyword, 'i').test(t.description); } catch(e) { return false; }
@@ -357,14 +343,12 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-background text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-x-hidden">
         
-        {/* --- GLOBAL COMPONENTS --- */}
         <AIConsultant 
             transactions={activeSession.transactions} 
             isOpen={isChatOpen} 
             onClose={() => setIsChatOpen(false)}
         />
         
-        {/* Floating Chat Button (Visible when chat is closed on Desktop) */}
         {!isChatOpen && (
             <button 
                 onClick={() => setIsChatOpen(true)}
@@ -375,7 +359,6 @@ const App: React.FC = () => {
             </button>
         )}
 
-        {/* --- MODALS --- */}
         <SmartImportModal 
             isOpen={isSmartImportOpen}
             onClose={() => setIsSmartImportOpen(false)}
@@ -428,7 +411,6 @@ const App: React.FC = () => {
             />
         )}
 
-        {/* --- LAYOUT --- */}
         <Sidebar 
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -444,9 +426,10 @@ const App: React.FC = () => {
             onImportFile={() => setIsSmartImportOpen(true)}
             onToggleChat={() => setIsChatOpen(prev => !prev)}
             isChatOpen={isChatOpen}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
 
-        {/* Mobile Header */}
         <div className="md:hidden fixed top-0 w-full bg-surface border-b border-slate-700 z-30 px-4 py-3 flex justify-between items-center">
              <div className="flex items-center space-x-2 text-indigo-400">
                 <ShieldCheck size={24} />
@@ -457,17 +440,15 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* Mobile Bottom Nav */}
         <div className="md:hidden fixed bottom-0 w-full bg-surface border-t border-slate-700 z-30 flex justify-around p-3 pb-safe">
              <button onClick={() => setActiveTab('dashboard')} className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><LayoutDashboard size={24} /></button>
              <button onClick={() => setActiveTab('transactions')} className={`p-2 rounded-lg ${activeTab === 'transactions' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><List size={24} /></button>
+             <button onClick={() => setActiveTab('budgets')} className={`p-2 rounded-lg ${activeTab === 'budgets' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Wallet size={24} /></button>
              <button onClick={() => setActiveTab('goals')} className={`p-2 rounded-lg ${activeTab === 'goals' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Target size={24} /></button>
-             <button onClick={() => setIsChatOpen(true)} className={`p-2 rounded-lg ${isChatOpen ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><MessageSquareText size={24} /></button>
              <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Settings size={24} /></button>
         </div>
 
-        {/* --- MAIN CONTENT --- */}
-        <main className={`md:ml-64 p-6 pt-20 md:pt-6 pb-24 md:pb-6 min-h-screen transition-all duration-300 ${isChatOpen ? 'md:mr-[450px]' : ''}`}>
+        <main className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'} p-6 pt-20 md:pt-6 pb-24 md:pb-6 min-h-screen ${isChatOpen ? 'md:mr-[450px]' : ''}`}>
             <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
                 <div>
                     <div className="flex items-center space-x-3 mb-2">
@@ -475,6 +456,7 @@ const App: React.FC = () => {
                           {activeTab === 'dashboard' && 'Financial Overview'}
                           {activeTab === 'transactions' && 'Transaction History'}
                           {activeTab === 'goals' && 'Goals & Allocations'}
+                          {activeTab === 'budgets' && 'Spending Budgets'}
                           {activeTab === 'settings' && 'Session Settings'}
                       </h1>
                       <span className="px-2 py-1 rounded-md bg-indigo-500/20 text-indigo-300 text-xs border border-indigo-500/30 font-medium">
@@ -485,6 +467,7 @@ const App: React.FC = () => {
                         {activeTab === 'dashboard' && 'Track your wealth and regular spending.'}
                         {activeTab === 'transactions' && 'Manage and organize your financial records.'}
                         {activeTab === 'goals' && 'Simulate, prioritize, and fund your dreams.'}
+                        {activeTab === 'budgets' && 'Monitor category spending against your limits.'}
                         {activeTab === 'settings' && 'Configure categorization rules.'}
                     </p>
                 </div>
@@ -516,6 +499,14 @@ const App: React.FC = () => {
                     availableCategories={activeSession.categories} 
                     onCategoryChange={handleTransactionCategoryChange} 
                     onTransactionClick={setSelectedTransactionId} 
+                />
+            )}
+            {activeTab === 'budgets' && (
+                <BudgetManager 
+                    budgets={activeSession.budgets || []}
+                    transactions={activeSession.transactions}
+                    categories={activeSession.categories}
+                    onUpdateBudgets={updateBudgets}
                 />
             )}
             {activeTab === 'goals' && (

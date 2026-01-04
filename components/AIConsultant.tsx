@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeFinancesDeeply, chatWithFinanceAssistant } from '../services/gemini';
 import { Transaction } from '../types';
-import { Sparkles, Send, BrainCircuit, Loader2, Bot, X, Globe } from 'lucide-react';
+import { Sparkles, Send, BrainCircuit, Loader2, Bot, X, Globe, Copy, Download, Check } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
@@ -26,6 +26,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [useThinkingModel, setUseThinkingModel] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -91,6 +92,39 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
       }
   };
 
+  // --- Export & Copy Logic ---
+
+  const getFormattedChat = () => {
+    return messages.map(m => {
+        const role = m.role === 'user' ? 'You' : 'FinSight AI';
+        const time = m.id === 'welcome' ? '' : ` [${new Date(Number(m.id)).toLocaleTimeString()}]`;
+        return `### ${role}${time}\n${m.content}\n`;
+    }).join('\n-----------------------------------\n');
+  };
+
+  const handleCopyChat = async () => {
+    try {
+        await navigator.clipboard.writeText(getFormattedChat());
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+        console.error('Failed to copy', err);
+    }
+  };
+
+  const handleExportChat = () => {
+    const text = getFormattedChat();
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `finsight-chat-${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <>
         {/* Mobile Backdrop */}
@@ -120,6 +154,26 @@ const AIConsultant: React.FC<AIConsultantProps> = ({ transactions, isOpen, onClo
                 </div>
                 
                 <div className="flex items-center space-x-1">
+                    {/* Copy Button */}
+                    <button
+                        onClick={handleCopyChat}
+                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors relative"
+                        title="Copy Chat"
+                    >
+                         {copySuccess ? <Check size={18} className="text-emerald-400" /> : <Copy size={18} />}
+                    </button>
+
+                    {/* Export Button */}
+                    <button
+                        onClick={handleExportChat}
+                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                        title="Export Chat (.txt)"
+                    >
+                        <Download size={18} />
+                    </button>
+
+                    <div className="w-px h-4 bg-slate-700 mx-1"></div>
+
                     <button
                         onClick={() => setUseThinkingModel(!useThinkingModel)}
                         className={`p-2 rounded-lg transition-all ${

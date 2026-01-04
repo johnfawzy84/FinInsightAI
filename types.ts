@@ -1,3 +1,4 @@
+
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
@@ -37,8 +38,8 @@ export interface Transaction {
   description: string;
   amount: number;
   type: TransactionType;
-  category: string; // String to allow AI flexibility, but roughly maps to Category enum
-  source?: string; // Identifier for the import source (e.g., "Chase Checking", "Manual")
+  category: string;
+  source?: string;
 }
 
 export interface CategorizationRule {
@@ -61,7 +62,7 @@ export interface AIAnalysisResult {
 }
 
 export interface ImportSettings {
-  delimiter: string; // ',' or ';'
+  delimiter: string;
   dateFormat: 'YYYY-MM-DD' | 'DD.MM.YYYY' | 'MM/DD/YYYY';
   decimalSeparator: '.' | ',';
 }
@@ -76,29 +77,36 @@ export interface Asset {
 
 export interface SavingRule {
   amount: number;
-  frequency: 'monthly' | 'once' | 'custom'; // Simple rule
+  frequency: 'monthly' | 'once' | 'custom';
 }
 
 export interface Goal {
   id: string;
-  type: 'GOAL' | 'POCKET'; // GOAL = Wishlist (Spend later), POCKET = Reserve (Hold indefinitely/Emergency)
+  type: 'GOAL' | 'POCKET';
   title: string;
   targetAmount: number;
   allocatedAmount: number;
-  targetDate: string; // For POCKET, this might just be a "review date"
-  priority: number; // 1 (Low) to 5 (Critical)
+  targetDate: string;
+  priority: number;
   icon: string; 
-  quickAdjustStep?: number; // Configurable +/- amount (e.g., 100)
-  savingRule?: SavingRule; // Defined saving strategy
+  quickAdjustStep?: number;
+  savingRule?: SavingRule;
+}
+
+export interface Budget {
+  id: string;
+  category: string;
+  limit: number;
+  period: 'monthly' | 'yearly';
 }
 
 export interface DashboardWidget {
   id: string;
-  type: 'net-worth' | 'assets' | 'cash-flow' | 'spending' | 'sankey' | 'custom';
+  type: 'net-worth' | 'assets' | 'cash-flow' | 'spending' | 'sankey' | 'recurring' | 'custom';
   title: string;
-  description?: string; // For AI generation context
-  query?: string; // The prompt used to generate it
-  cachedConfig?: any; // The Recharts config and data
+  description?: string;
+  query?: string;
+  cachedConfig?: any;
   visible: boolean;
   width: 'full' | 'half';
   lastUpdated?: number;
@@ -112,7 +120,8 @@ export interface Session {
   rules: CategorizationRule[];
   assets: Asset[];
   goals: Goal[];
-  sources: string[]; // List of available import sources
+  budgets: Budget[];
+  sources: string[];
   dashboardWidgets: DashboardWidget[];
   createdAt: number;
   importSettings: ImportSettings;
@@ -125,12 +134,13 @@ export interface ImportSelection {
   assets: boolean;
   dashboard: boolean;
   goals: boolean;
+  budgets: boolean;
 }
 
 export interface ColumnMapping {
   dateIndex: number;
   descriptionIndex: number;
   amountIndex: number;
-  categoryIndex: number; // -1 if not present
-  typeIndex: number; // -1 if not present
+  categoryIndex: number;
+  typeIndex: number;
 }

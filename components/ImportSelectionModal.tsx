@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Session, ImportSelection } from '../types';
-import { Download, CheckCircle, X, List, Zap, PieChart, Layout, Target } from 'lucide-react';
+import { Download, CheckCircle, X, List, Zap, PieChart, Layout, Target, Wallet } from 'lucide-react';
 
 interface ImportSelectionModalProps {
   importData: Session;
@@ -9,13 +9,15 @@ interface ImportSelectionModalProps {
 }
 
 export const ImportSelectionModal: React.FC<ImportSelectionModalProps> = ({ importData, onConfirm, onCancel }) => {
+  // Fix: Added missing 'budgets' property to match ImportSelection interface
   const [selection, setSelection] = useState<ImportSelection>({
     transactions: true,
     categories: true,
     rules: true,
     assets: true,
     dashboard: true,
-    goals: true
+    goals: true,
+    budgets: true
   });
 
   const handleToggle = (key: keyof ImportSelection) => {
@@ -125,6 +127,23 @@ export const ImportSelectionModal: React.FC<ImportSelectionModalProps> = ({ impo
               </div>
             </div>
             {selection.goals && <CheckCircle className="text-indigo-400" size={20} />}
+          </div>
+
+          {/* Budgets */}
+          <div 
+            onClick={() => handleToggle('budgets')}
+            className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${selection.budgets ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${selection.budgets ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                <Wallet size={20} />
+              </div>
+              <div>
+                <h4 className={`font-semibold ${selection.budgets ? 'text-white' : 'text-slate-400'}`}>Budgets</h4>
+                <p className="text-xs text-slate-500">{getCount('budgets')} items found</p>
+              </div>
+            </div>
+            {selection.budgets && <CheckCircle className="text-indigo-400" size={20} />}
           </div>
 
           {/* Dashboard */}
