@@ -15,23 +15,20 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine
+## Production stage: serve with nginx
+FROM nginx:stable-alpine AS runtime
 
-WORKDIR /app
+# Copy built assets from builder to nginx html folder
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Install a simple HTTP server to serve static files
-RUN npm install -g serve
+# Copy custom nginx config
+COPY docker/nginx/finsightai.conf /etc/nginx/conf.d/default.conf
 
-# Copy built assets from builder
-COPY --from=builder /app/dist ./dist
+# Expose HTTP port
+EXPOSE 80
 
-# Expose port
-EXPOSE 3000
-
-# Health check
+# Healthcheck - nginx will respond on port 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
 
-# Serve the application
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["nginx", "-g", "daemon off;"]
