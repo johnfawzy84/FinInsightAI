@@ -1,0 +1,9 @@
+1. Get the application URL by running these commands:
+
+  - If you installed a ClusterIP service with port-forwarding:
+
+      kubectl port-forward svc/{{ include "finsightai.fullname" . }} 8080:{{ .Values.service.port }}
+
+  - If you installed an Ingress and your cluster provides ingress DNS:
+
+      printf "Visit http://%s\n" {{ (index .Values.ingress.hosts 0).host }}
