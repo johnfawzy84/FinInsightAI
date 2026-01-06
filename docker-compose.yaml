@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fininsightai:latest
+    ports:
+      - "80:80"
+    environment:
+      - PORT=80
+      - PYTHONUNBUFFERED=1
+      - GEMINI_API_KEY=${API_KEY}
+      - API_KEY=${API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
