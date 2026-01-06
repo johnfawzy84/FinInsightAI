@@ -1,5 +1,3 @@
-
-
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
@@ -92,6 +90,7 @@ export interface Goal {
   icon: string; 
   quickAdjustStep?: number;
   savingRule?: SavingRule;
+  linkedPocketId?: string;
 }
 
 export interface Budget {
@@ -99,6 +98,7 @@ export interface Budget {
   category: string;
   limit: number;
   period: 'monthly' | 'yearly';
+  linkedPocketId?: string;
 }
 
 export interface DashboardWidget {
@@ -113,9 +113,18 @@ export interface DashboardWidget {
   lastUpdated?: number;
 }
 
+export interface GoogleUser {
+  id: string;
+  email: string;
+  name: string;
+  picture: string;
+  accessToken: string;
+}
+
 export interface Session {
   id: string;
   name: string;
+  currency: string;
   transactions: Transaction[];
   categories: string[];
   rules: CategorizationRule[];
@@ -126,6 +135,7 @@ export interface Session {
   dashboardWidgets: DashboardWidget[];
   createdAt: number;
   importSettings: ImportSettings;
+  lastSyncedAt?: number;
 }
 
 export interface ImportSelection {

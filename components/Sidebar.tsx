@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   ShieldCheck, 
@@ -16,9 +15,13 @@ import {
   Target,
   Wallet,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  LogOut
 } from 'lucide-react';
-import { Session } from '../types';
+import { Session, GoogleUser } from '../types';
 
 interface SidebarProps {
   sessions: Session[];
@@ -34,6 +37,9 @@ interface SidebarProps {
   isChatOpen: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  googleUser: GoogleUser | null;
+  isSyncing: boolean;
+  onCloudSync: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -49,7 +55,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   onToggleChat,
   isChatOpen,
   isCollapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  googleUser,
+  isSyncing,
+  onCloudSync
 }) => {
   const [isSessionsExpanded, setIsSessionsExpanded] = useState(true);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -87,13 +96,40 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
+      {/* Cloud Sync Status */}
       {!isCollapsed && (
-        <div className="px-6 py-2 border-b border-slate-700/50">
-            <p className="text-xs text-slate-500">Smart Financial Intelligence</p>
+        <div className="px-6 py-3 border-b border-slate-700/50 flex items-center justify-between group">
+            {googleUser ? (
+                <div className="flex items-center gap-2 overflow-hidden">
+                    <img src={googleUser.picture} className="w-6 h-6 rounded-full border border-indigo-500/50" alt="profile" />
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] font-bold text-white truncate">{googleUser.name}</span>
+                        <span className="text-[9px] text-indigo-400 flex items-center gap-1">
+                            {isSyncing ? <RefreshCw size={8} className="animate-spin" /> : <Cloud size={8} />}
+                            {isSyncing ? 'Syncing...' : 'Cloud Active'}
+                        </span>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center gap-2 text-slate-500 italic">
+                    <CloudOff size={14} />
+                    <span className="text-[10px] font-semibold">Local Session</span>
+                </div>
+            )}
+            {googleUser && (
+                <button 
+                    onClick={onCloudSync}
+                    disabled={isSyncing}
+                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                    title="Force Sync Now"
+                >
+                    <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+                </button>
+            )}
         </div>
       )}
 
-      {/* Sessions Section - Scrollable and Reachable */}
+      {/* Sessions Section */}
       <div className={`px-4 pt-4 pb-2 border-b border-slate-700/50 flex flex-col ${isCollapsed ? 'items-center' : ''}`}>
         {!isCollapsed && (
           <div 

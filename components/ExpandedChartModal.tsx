@@ -12,11 +12,12 @@ import { X, ZoomIn } from 'lucide-react';
 interface ExpandedChartModalProps {
   config: any;
   onClose: () => void;
+  currency: string;
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, currency }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-900 border border-slate-700 p-4 rounded-lg shadow-2xl z-50">
@@ -24,7 +25,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm flex items-center gap-2" style={{ color: entry.color || entry.fill }}>
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }}></span>
-            {entry.name}: <span className="font-mono font-bold text-white">${(typeof entry.value === 'number') ? entry.value.toLocaleString() : entry.value}</span>
+            {entry.name}: <span className="font-mono font-bold text-white">{currency}{(typeof entry.value === 'number') ? entry.value.toLocaleString() : entry.value}</span>
           </p>
         ))}
       </div>
@@ -33,7 +34,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, onClose }) => {
+export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, onClose, currency }) => {
   if (!config) return null;
 
   const { chartType, data, xAxisKey, series, title, description } = config;
@@ -45,8 +46,8 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
                 <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                     <XAxis dataKey={xAxisKey} stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} tickFormatter={(val) => `$${val}`} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b' }} />
+                    <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} tickFormatter={(val) => `${currency}${val}`} />
+                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} cursor={{ fill: '#1e293b' }} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     {series.map((s: any) => (
                         <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={60} />
@@ -60,7 +61,7 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                     <XAxis dataKey={xAxisKey} stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
                     <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     {series.map((s: any) => (
                         <Line key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 8 }} />
@@ -82,7 +83,7 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                     <XAxis dataKey={xAxisKey} stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
                     <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     {series.map((s: any, i: number) => (
                         <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} strokeWidth={3} fill={`url(#expandedColor${i})`} />
@@ -109,7 +110,7 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
                             <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
                         ))}
                      </Pie>
-                     <Tooltip content={<CustomTooltip />} />
+                     <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
                  </PieChart>
              );
@@ -117,12 +118,12 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
             return (
                 <Sankey
                     data={data}
-                    node={{ stroke: '#1e293b', strokeWidth: 0, fill: '#6366f1' }}
+                    node={{ stroke: '#1e293b', strokeWidth: 0 }}
                     link={{ stroke: '#64748b', fillOpacity: 0.3 }}
                     nodePadding={50}
                     margin={{ left: 20, right: 20, top: 20, bottom: 20 }}
                 >
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                 </Sankey>
             );
         default:

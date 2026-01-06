@@ -12,7 +12,6 @@ import { ImportSelectionModal } from './components/ImportSelectionModal';
 import { SmartImportModal } from './components/SmartImportModal';
 import { useSessionData, applyRulesToTransactions } from './hooks/useSessionData';
 import { categorizeTransactionsAI, generateRulesFromHistory } from './services/gemini';
-import { parseFile } from './utils/parser';
 import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings, Target, Wallet } from 'lucide-react';
 import { GoalManager } from './components/GoalManager';
 import { BudgetManager } from './components/BudgetManager';
@@ -29,7 +28,6 @@ const App: React.FC = () => {
     setActiveSessionId, 
     addSession, 
     removeSession, 
-    importSession,
     mergeSession,
     updateTransactions,
     updateSettings,
@@ -40,7 +38,12 @@ const App: React.FC = () => {
     updateBudgets,
     updateDashboardWidgets,
     updateSessionRaw,
-    deleteSource
+    deleteSource,
+    googleUser,
+    isSyncing,
+    handleGoogleLogin,
+    syncToCloud,
+    syncFromCloud
   } = useSessionData();
 
   const [isCategorizing, setIsCategorizing] = useState(false);
@@ -408,6 +411,7 @@ const App: React.FC = () => {
                 availableCategories={activeSession.categories}
                 onClose={() => setSelectedTransactionId(null)}
                 onSave={handleSaveDetails}
+                currency={activeSession.currency || '$'}
             />
         )}
 
@@ -428,6 +432,9 @@ const App: React.FC = () => {
             isChatOpen={isChatOpen}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            googleUser={googleUser}
+            isSyncing={isSyncing}
+            onCloudSync={syncToCloud}
         />
 
         <div className="md:hidden fixed top-0 w-full bg-surface border-b border-slate-700 z-30 px-4 py-3 flex justify-between items-center">
@@ -468,7 +475,7 @@ const App: React.FC = () => {
                         {activeTab === 'transactions' && 'Manage and organize your financial records.'}
                         {activeTab === 'goals' && 'Simulate, prioritize, and fund your dreams.'}
                         {activeTab === 'budgets' && 'Monitor category spending against your limits.'}
-                        {activeTab === 'settings' && 'Configure categorization rules.'}
+                        {activeTab === 'settings' && 'Configure cloud sync and rules.'}
                     </p>
                 </div>
                 
@@ -491,6 +498,7 @@ const App: React.FC = () => {
                     onUpdateAssets={updateAssets}
                     activeSession={activeSession}
                     onUpdateDashboardWidgets={updateDashboardWidgets}
+                    currency={activeSession.currency || '$'}
                 />
             )}
             {activeTab === 'transactions' && (
@@ -499,6 +507,7 @@ const App: React.FC = () => {
                     availableCategories={activeSession.categories} 
                     onCategoryChange={handleTransactionCategoryChange} 
                     onTransactionClick={setSelectedTransactionId} 
+                    currency={activeSession.currency || '$'}
                 />
             )}
             {activeTab === 'budgets' && (
@@ -507,6 +516,8 @@ const App: React.FC = () => {
                     transactions={activeSession.transactions}
                     categories={activeSession.categories}
                     onUpdateBudgets={updateBudgets}
+                    goals={activeSession.goals || []}
+                    currency={activeSession.currency || '$'}
                 />
             )}
             {activeTab === 'goals' && (
@@ -515,6 +526,7 @@ const App: React.FC = () => {
                     assets={activeSession.assets || []}
                     transactions={activeSession.transactions}
                     onUpdateGoals={updateGoals}
+                    currency={activeSession.currency || '$'}
                /> 
             )}
             {activeTab === 'settings' && (
@@ -533,6 +545,12 @@ const App: React.FC = () => {
                     onUpdateDashboardWidgets={updateDashboardWidgets}
                     transactions={activeSession.transactions}
                     onDeleteSource={deleteSource}
+                    googleUser={googleUser}
+                    onGoogleLogin={handleGoogleLogin}
+                    onCloudSave={syncToCloud}
+                    onCloudLoad={syncFromCloud}
+                    isSyncing={isSyncing}
+                    onUpdateCurrency={(c) => updateSessionRaw(s => ({ ...s, currency: c }))}
                 />
             )}
         </main>

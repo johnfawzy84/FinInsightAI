@@ -1,9 +1,13 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, CategorizationRule, Budget } from "../types";
 
 // Always use named parameters and exclusively get the API key from process.env.API_KEY.
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAI = () => {
+  if (!process.env.API_KEY) {
+    throw new Error("Gemini API Key is not configured. Please set it in Settings.");
+  }
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 export const proposeBudgetsAI = async (
   transactions: Transaction[],

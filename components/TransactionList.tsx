@@ -7,13 +7,15 @@ interface TransactionListProps {
   availableCategories: string[];
   onCategoryChange: (transactionId: string, newCategory: string) => void;
   onTransactionClick?: (transactionId: string) => void;
+  currency: string;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({ 
   transactions, 
   availableCategories, 
   onCategoryChange,
-  onTransactionClick
+  onTransactionClick,
+  currency
 }) => {
   const [filters, setFilters] = useState({
     date: '',
@@ -207,7 +209,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     <td className={`px-6 py-4 text-right font-bold ${t.type === TransactionType.INCOME ? 'text-emerald-400' : 'text-slate-200'}`}>
                     <div className="flex items-center justify-end space-x-1">
                         {t.type === TransactionType.INCOME ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
-                        <span>${t.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span>{currency}{t.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     </td>
                 </tr>

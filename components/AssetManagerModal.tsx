@@ -6,12 +6,13 @@ interface AssetManagerModalProps {
   assets: Asset[];
   onUpdateAssets: (updater: (assets: Asset[]) => Asset[]) => void;
   onClose: () => void;
+  currency: string;
 }
 
 const COLORS = ['#10b981', '#34d399', '#6366f1', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16'];
 const ASSET_TYPES = ['Cash', 'Stock', 'Crypto', 'Real Estate', 'Other'];
 
-export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({ assets, onUpdateAssets, onClose }) => {
+export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({ assets, onUpdateAssets, onClose, currency }) => {
   const [newAsset, setNewAsset] = useState<Partial<Asset>>({ name: '', value: 0, type: 'Cash', color: COLORS[0] });
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -73,7 +74,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({ assets, on
                         className="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
                     />
                     <div className="relative">
-                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currency}</span>
                         <input 
                             type="number" 
                             placeholder="Value" 
@@ -128,7 +129,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({ assets, on
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
-                                <span className="font-bold text-white font-mono">${asset.value.toLocaleString()}</span>
+                                <span className="font-bold text-white font-mono">{currency}{asset.value.toLocaleString()}</span>
                                 <button 
                                     onClick={() => handleDelete(asset.id)}
                                     className="text-slate-500 hover:text-red-400 transition-colors"
@@ -143,7 +144,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({ assets, on
         </div>
         
         <div className="p-4 bg-slate-800/50 border-t border-slate-700 text-center text-xs text-slate-400">
-            Total Assets: <span className="text-emerald-400 font-bold text-sm ml-1">${assets.reduce((sum, a) => sum + a.value, 0).toLocaleString()}</span>
+            Total Assets: <span className="text-emerald-400 font-bold text-sm ml-1">{currency}{assets.reduce((sum, a) => sum + a.value, 0).toLocaleString()}</span>
         </div>
       </div>
     </div>

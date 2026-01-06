@@ -15,6 +15,7 @@ interface TransactionDetailModalProps {
     applyToSimilar: boolean, 
     newRule: { keyword: string, category: string, isRegex: boolean } | null
   ) => void;
+  currency: string;
 }
 
 const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
@@ -24,7 +25,8 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   activeRule,
   availableCategories,
   onClose,
-  onSave
+  onSave,
+  currency
 }) => {
   const [category, setCategory] = useState(transaction.category);
   const [applyToSimilar, setApplyToSimilar] = useState(true);
@@ -112,7 +114,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                         <div>
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</label>
                             <div className={`text-2xl font-bold ${transaction.type === TransactionType.INCOME ? 'text-emerald-400' : 'text-white'}`}>
-                                ${transaction.amount.toFixed(2)}
+                                {currency}{transaction.amount.toFixed(2)}
                             </div>
                         </div>
                     </div>
@@ -208,14 +210,14 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                     <label className="text-xs text-slate-500 uppercase font-semibold flex items-center gap-1 mb-1">
                         <Wallet size={14} /> Similar (Description)
                     </label>
-                    <div className="text-lg font-bold text-white">${totalSimilarAmount.toFixed(2)}</div>
+                    <div className="text-lg font-bold text-white">{currency}{totalSimilarAmount.toFixed(2)}</div>
                     <div className="text-xs text-slate-400">{similarTransactions.length} transactions</div>
                 </div>
                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                      <label className="text-xs text-slate-500 uppercase font-semibold flex items-center gap-1 mb-1">
                         <Tag size={14} /> Category Total
                     </label>
-                    <div className="text-lg font-bold text-white">${totalCategoryAmount.toFixed(2)}</div>
+                    <div className="text-lg font-bold text-white">{currency}{totalCategoryAmount.toFixed(2)}</div>
                     <div className="text-xs text-slate-400">{categoryTransactions.length} transactions in '{transaction.category}'</div>
                 </div>
             </div>
@@ -230,7 +232,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                                 <tr key={t.id} className="text-slate-400 hover:bg-slate-800/50">
                                     <td className="p-2">{t.date}</td>
                                     <td className="p-2 truncate max-w-[200px]">{t.description}</td>
-                                    <td className="p-2 text-right">${t.amount.toFixed(2)}</td>
+                                    <td className="p-2 text-right">{currency}{t.amount.toFixed(2)}</td>
                                 </tr>
                             ))}
                         </tbody>

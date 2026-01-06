@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { 
   AreaChart, Area, 
@@ -20,18 +19,19 @@ interface DashboardProps {
   onUpdateAssets: (updater: (assets: Asset[]) => Asset[]) => void;
   activeSession: Session;
   onUpdateDashboardWidgets: (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => void;
+  currency: string;
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, currency }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl z-50">
         <p className="text-slate-200 text-sm font-medium mb-1">{label || payload[0].name}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-xs" style={{ color: entry.color || entry.fill }}>
-            {entry.name}: <span className="font-bold font-mono">${(typeof entry.value === 'number') ? entry.value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) : entry.value}</span>
+            {entry.name}: <span className="font-bold font-mono">{currency}{(typeof entry.value === 'number') ? entry.value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) : entry.value}</span>
           </p>
         ))}
       </div>
@@ -40,7 +40,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const GenericChartRenderer = ({ config }: { config: any }) => {
+const GenericChartRenderer = ({ config, currency }: { config: any, currency: string }) => {
     if (!config || config.chartType === 'error') {
         return <div className="flex items-center justify-center h-full text-red-400 text-sm">{config?.title || "Error loading chart"}</div>
     }
@@ -54,7 +54,7 @@ const GenericChartRenderer = ({ config }: { config: any }) => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                     <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
                     <YAxis stroke="#64748b" fontSize={10} />
-                    <RechartsTooltip content={<CustomTooltip />} />
+                    <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                     <Legend />
                     {series.map((s: any) => (
                         <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} />
@@ -67,7 +67,7 @@ const GenericChartRenderer = ({ config }: { config: any }) => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                     <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
                     <YAxis stroke="#64748b" fontSize={10} />
-                    <RechartsTooltip content={<CustomTooltip />} />
+                    <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                     <Legend />
                     {series.map((s: any) => (
                         <Line key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} strokeWidth={2} />
@@ -88,7 +88,7 @@ const GenericChartRenderer = ({ config }: { config: any }) => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                     <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
                     <YAxis stroke="#64748b" fontSize={10} />
-                    <RechartsTooltip content={<CustomTooltip />} />
+                    <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                     <Legend />
                     {series.map((s: any, i: number) => (
                         <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} fill={`url(#color${i})`} />
@@ -112,7 +112,7 @@ const GenericChartRenderer = ({ config }: { config: any }) => {
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
                         ))}
                      </Pie>
-                     <RechartsTooltip content={<CustomTooltip />} />
+                     <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                      <Legend />
                  </PieChart>
              );
@@ -121,7 +121,7 @@ const GenericChartRenderer = ({ config }: { config: any }) => {
     }
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets, activeSession, onUpdateDashboardWidgets }) => {
+const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets, activeSession, onUpdateDashboardWidgets, currency }) => {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 6);
@@ -327,25 +327,100 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       .sort((a, b) => b.value - a.value);
   }, [filteredTransactions]);
 
-  const totalSpent = spendingData.reduce((acc, curr) => acc + curr.value, 0);
-
   const sankeyData = useMemo(() => {
-    const incomeTotal = filteredTransactions
-        .filter(t => t.type === TransactionType.INCOME)
-        .reduce((sum, t) => sum + t.amount, 0);
-    const expenseCats = spendingData.slice(0, 6);
-    const otherExpense = spendingData.slice(6).reduce((sum, t) => sum + t.value, 0);
-    const totalExpense = totalSpent;
-    const surplus = Math.max(0, incomeTotal - totalExpense);
-    const nodes = [ { name: 'Income' }, ...expenseCats.map(c => ({ name: c.name })) ];
-    if (otherExpense > 0) nodes.push({ name: 'Other' });
-    if (surplus > 0) nodes.push({ name: 'Savings' });
-    const links = [];
-    expenseCats.forEach((cat, idx) => { links.push({ source: 0, target: idx + 1, value: cat.value }); });
-    if (otherExpense > 0) links.push({ source: 0, target: expenseCats.length + 1, value: otherExpense });
-    if (surplus > 0) links.push({ source: 0, target: nodes.length - 1, value: surplus });
+    // 1. Income Data
+    const incomeTx = filteredTransactions.filter(t => t.type === TransactionType.INCOME);
+    const incomeGrouped = new Map<string, number>();
+    incomeTx.forEach(t => {
+        const cat = t.category || 'Uncategorized';
+        incomeGrouped.set(cat, (incomeGrouped.get(cat) || 0) + t.amount);
+    });
+    
+    let incomeNodesList = Array.from(incomeGrouped.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+    // Collapse small income if > 6
+    if (incomeNodesList.length > 6) {
+        const top = incomeNodesList.slice(0, 5);
+        const otherVal = incomeNodesList.slice(5).reduce((s, i) => s + i.value, 0);
+        incomeNodesList = [...top, { name: 'Other Income', value: otherVal }];
+    }
+
+    const totalIncome = incomeNodesList.reduce((s, i) => s + i.value, 0);
+
+    // 2. Expense Data (use spendingData which is already processed expenses)
+    let expenseNodesList = [...spendingData];
+    
+    // Collapse small expenses if > 8 (Sankey gets tall)
+    if (expenseNodesList.length > 8) {
+        const top = expenseNodesList.slice(0, 7);
+        const otherVal = expenseNodesList.slice(7).reduce((s, i) => s + i.value, 0);
+        expenseNodesList = [...top, { name: 'Other Expenses', value: otherVal }];
+    }
+
+    const totalExpense = expenseNodesList.reduce((s, i) => s + i.value, 0);
+
+    // 3. Balance
+    const surplus = Math.max(0, totalIncome - totalExpense);
+    const deficit = Math.max(0, totalExpense - totalIncome);
+
+    // 4. Build Nodes & Links
+    const nodes: { name: string; fill?: string }[] = [];
+    const links: { source: number; target: number; value: number }[] = [];
+    
+    // A. Income Nodes (Emerald)
+    const incomeIndices = incomeNodesList.map(item => {
+        nodes.push({ name: item.name, fill: '#10b981' });
+        return nodes.length - 1;
+    });
+
+    // B. Deficit Node (if needed) (Amber)
+    let deficitIndex = -1;
+    if (deficit > 0) {
+        nodes.push({ name: 'Deficit (Reserves)', fill: '#f59e0b' });
+        deficitIndex = nodes.length - 1;
+    }
+
+    // C. Center Node (Indigo)
+    nodes.push({ name: 'Total Budget', fill: '#6366f1' });
+    const centerIndex = nodes.length - 1;
+
+    // D. Expense Nodes (Varied Colors)
+    const expenseIndices = expenseNodesList.map((item, i) => {
+        nodes.push({ name: item.name, fill: COLORS[i % COLORS.length] });
+        return nodes.length - 1;
+    });
+
+    // E. Savings Node (if needed) (Cyan)
+    let savingsIndex = -1;
+    if (surplus > 0) {
+        nodes.push({ name: 'Savings', fill: '#06b6d4' });
+        savingsIndex = nodes.length - 1;
+    }
+
+    // Links: Income -> Center
+    incomeNodesList.forEach((item, i) => {
+        links.push({ source: incomeIndices[i], target: centerIndex, value: item.value });
+    });
+
+    // Links: Deficit -> Center
+    if (deficit > 0) {
+        links.push({ source: deficitIndex, target: centerIndex, value: deficit });
+    }
+
+    // Links: Center -> Expenses
+    expenseNodesList.forEach((item, i) => {
+        links.push({ source: centerIndex, target: expenseIndices[i], value: item.value });
+    });
+
+    // Links: Center -> Savings
+    if (surplus > 0) {
+        links.push({ source: centerIndex, target: savingsIndex, value: surplus });
+    }
+
     return { nodes, links };
-  }, [filteredTransactions, spendingData, totalSpent]);
+  }, [filteredTransactions, spendingData]);
 
   const handleExpandWidget = (widget: DashboardWidget) => {
     let config = null;
@@ -380,7 +455,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                         </div>
                         <div className="flex items-center gap-4">
                              <div className="text-right">
-                                <p className="text-2xl font-bold text-white">${(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
+                                <p className="text-2xl font-bold text-white">{currency}{(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
                                 <p className="text-xs text-emerald-400">Current Estimate</p>
                             </div>
                             <ExpandButton />
@@ -391,8 +466,8 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <defs><linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient></defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                             <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(val) => { const d = new Date(val); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; }} minTickGap={40} />
-                            <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
-                            <RechartsTooltip content={<CustomTooltip />} />
+                            <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `${currency}${val/1000}k`} />
+                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                             <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -416,7 +491,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <Pie data={assets} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value">
                                 {assets.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />)}
                             </Pie>
-                            <RechartsTooltip content={<CustomTooltip />} />
+                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                         </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -445,7 +520,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                                   </div>
                                   <div className="text-right">
                                       <div className={`text-sm font-bold font-mono ${item.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
-                                          ${item.amount.toLocaleString()}
+                                          {currency}{item.amount.toLocaleString()}
                                       </div>
                                       <div className="text-[10px] text-slate-500">Est. Monthly</div>
                                   </div>
@@ -474,7 +549,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                             <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
                             <YAxis stroke="#64748b" fontSize={10} />
-                            <RechartsTooltip content={<CustomTooltip />} />
+                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                             <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
                             <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
                         </BarChart>
@@ -496,7 +571,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                                 <Pie data={spendingData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value">
                                     {spendingData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                 </Pie>
-                                <RechartsTooltip content={<CustomTooltip />} />
+                                <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                             </PieChart>
                         </ResponsiveContainer>
                    </div>
@@ -512,8 +587,12 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <ExpandButton />
                         </div>
                         <ResponsiveContainer width="100%" height={350}>
-                            <Sankey data={sankeyData} node={{ stroke: '#1e293b', strokeWidth: 0, fill: '#6366f1' }} link={{ stroke: '#64748b' }}>
-                                <RechartsTooltip content={<CustomTooltip />} />
+                            <Sankey 
+                                data={sankeyData} 
+                                node={{ stroke: '#1e293b', strokeWidth: 0 }} 
+                                link={{ stroke: '#64748b', fillOpacity: 0.3 }}
+                            >
+                                <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
                             </Sankey>
                         </ResponsiveContainer>
                     </div>
@@ -543,7 +622,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             )}
                         </div>
                         <ResponsiveContainer width="100%" height={250}>
-                            <GenericChartRenderer config={widget.cachedConfig} />
+                            <GenericChartRenderer config={widget.cachedConfig} currency={currency} />
                         </ResponsiveContainer>
                     </div>
                 );
@@ -554,8 +633,8 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      {isAssetModalOpen && <AssetManagerModal assets={assets} onUpdateAssets={onUpdateAssets} onClose={() => setIsAssetModalOpen(false)} />}
-      <ExpandedChartModal config={expandedChartConfig} onClose={() => setExpandedChartConfig(null)} />
+      {isAssetModalOpen && <AssetManagerModal assets={assets} onUpdateAssets={onUpdateAssets} onClose={() => setIsAssetModalOpen(false)} currency={currency} />}
+      <ExpandedChartModal config={expandedChartConfig} onClose={() => setExpandedChartConfig(null)} currency={currency} />
 
       <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-6 rounded-xl border border-indigo-500/30 shadow-lg group relative">
          <div className="flex items-center gap-2 mb-4">
@@ -572,7 +651,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                     <h4 className="font-semibold text-white">{customChartConfig.title}</h4>
                     <button onClick={handleSavePlaygroundChart} className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded transition-colors shadow"><Save size={14}/> Save to Dashboard</button>
                  </div>
-                 <ResponsiveContainer width="100%" height={250}><GenericChartRenderer config={customChartConfig} /></ResponsiveContainer>
+                 <ResponsiveContainer width="100%" height={250}><GenericChartRenderer config={customChartConfig} currency={currency} /></ResponsiveContainer>
              </div>
          )}
       </div>

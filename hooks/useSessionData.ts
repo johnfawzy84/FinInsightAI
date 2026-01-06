@@ -1,6 +1,6 @@
-
-import { useState, useMemo } from 'react';
-import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection, Goal, Budget } from '../types';
+import { useState, useMemo, useEffect } from 'react';
+import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection, Goal, Budget, GoogleUser } from '../types';
+import { initGoogleClient, loginToGoogle, saveToDrive, loadFromDrive } from '../services/googleDrive';
 
 export const applyRulesToTransactions = (transactions: Transaction[], rules: CategorizationRule[]): Transaction[] => {
   if (rules.length === 0) return transactions;
@@ -63,23 +63,46 @@ export const useSessionData = () => {
     { id: 'w-sankey', type: 'sankey', title: 'Income to Expense Flow', visible: true, width: 'full' },
   ];
 
-  const [sessions, setSessions] = useState<Session[]>([
-    {
-      id: 'default-session',
-      name: 'Personal Finance',
-      transactions: initialTransactions,
-      categories: [...DEFAULT_CATEGORIES],
-      rules: [],
-      assets: initialAssets,
-      goals: initialGoals,
-      budgets: initialBudgets,
-      sources: ['Manual Entry'],
-      dashboardWidgets: defaultWidgets,
-      createdAt: Date.now(),
-      importSettings: defaultSettings
-    }
-  ]);
-  const [activeSessionId, setActiveSessionId] = useState<string>('default-session');
+  const [sessions, setSessions] = useState<Session[]>(() => {
+    const saved = localStorage.getItem('finsight_sessions');
+    if (saved) return JSON.parse(saved);
+    return [
+        {
+          id: 'default-session',
+          name: 'Personal Finance',
+          currency: '$',
+          transactions: initialTransactions,
+          categories: [...DEFAULT_CATEGORIES],
+          rules: [],
+          assets: initialAssets,
+          goals: initialGoals,
+          budgets: initialBudgets,
+          sources: ['Manual Entry'],
+          dashboardWidgets: defaultWidgets,
+          createdAt: Date.now(),
+          importSettings: defaultSettings
+        }
+    ];
+  });
+  
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+      const saved = localStorage.getItem('finsight_active_id');
+      return saved || 'default-session';
+  });
+
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Persistence to LocalStorage
+  useEffect(() => {
+    localStorage.setItem('finsight_sessions', JSON.stringify(sessions));
+    localStorage.setItem('finsight_active_id', activeSessionId);
+  }, [sessions, activeSessionId]);
+
+  // Init Google Client
+  useEffect(() => {
+    initGoogleClient().catch(err => console.error('Failed to init Google Client', err));
+  }, []);
 
   const activeSession = useMemo(() => {
     return sessions.find(s => s.id === activeSessionId) || sessions[0];
@@ -89,6 +112,7 @@ export const useSessionData = () => {
     const newSession: Session = {
       id: `session-${Date.now()}`,
       name,
+      currency: '$',
       transactions: [],
       categories: [...DEFAULT_CATEGORIES],
       rules: [],
@@ -113,19 +137,55 @@ export const useSessionData = () => {
     }
   };
 
-  const importSession = (sessionData: any) => {
-    const newSession: Session = {
-        ...sessionData,
-        id: `session-${Date.now()}`,
-        name: sessionData.name ? `${sessionData.name} (Imported)` : 'Imported Session',
-        dashboardWidgets: sessionData.dashboardWidgets || [...defaultWidgets],
-        goals: sessionData.goals || [],
-        budgets: sessionData.budgets || [],
-        sources: sessionData.sources || [],
-        createdAt: Date.now()
-    };
-    setSessions(prev => [...prev, newSession]);
-    setActiveSessionId(newSession.id);
+  const handleGoogleLogin = async () => {
+    try {
+        const user = await loginToGoogle();
+        setGoogleUser(user);
+        return user;
+    } catch (err) {
+        console.error('Login failed', err);
+        throw err;
+    }
+  };
+
+  const syncToCloud = async () => {
+    if (!googleUser) return;
+    setIsSyncing(true);
+    try {
+        const dataToSave = {
+            sessions,
+            activeSessionId,
+            lastSyncedAt: Date.now()
+        };
+        await saveToDrive(dataToSave);
+        // Update local sync time
+        setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, lastSyncedAt: Date.now() } : s));
+    } catch (err) {
+        console.error('Sync failed', err);
+        alert('Cloud sync failed. Please check your connection.');
+    } finally {
+        setIsSyncing(false);
+    }
+  };
+
+  const syncFromCloud = async () => {
+    if (!googleUser) return;
+    setIsSyncing(true);
+    try {
+        const cloudData = await loadFromDrive();
+        if (cloudData && cloudData.sessions) {
+            setSessions(cloudData.sessions);
+            setActiveSessionId(cloudData.activeSessionId);
+            alert('Cloud data loaded successfully!');
+        } else {
+            alert('No cloud backup found. Save your first session to Drive!');
+        }
+    } catch (err) {
+        console.error('Load from cloud failed', err);
+        alert('Failed to load from cloud.');
+    } finally {
+        setIsSyncing(false);
+    }
   };
 
   const mergeSession = (incomingData: Session, selection: ImportSelection) => {
@@ -262,7 +322,6 @@ export const useSessionData = () => {
     setActiveSessionId,
     addSession,
     removeSession,
-    importSession,
     mergeSession,
     updateTransactions,
     updateSettings,
@@ -273,6 +332,11 @@ export const useSessionData = () => {
     updateBudgets,
     updateDashboardWidgets,
     updateSessionRaw,
-    deleteSource
+    deleteSource,
+    googleUser,
+    isSyncing,
+    handleGoogleLogin,
+    syncToCloud,
+    syncFromCloud
   };
 };

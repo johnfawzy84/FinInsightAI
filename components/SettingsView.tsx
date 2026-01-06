@@ -1,37 +1,30 @@
-
-import React, { useState } from 'react';
-import { Session, CategorizationRule, ImportSettings, Transaction, DashboardWidget } from '../types';
-import { generateDynamicChart } from '../services/gemini';
+import React, { useState, useEffect } from 'react';
+import { Session, CategorizationRule, ImportSettings, Transaction, DashboardWidget, GoogleUser } from '../types';
 import { 
-  Settings, 
   FileJson, 
   Download, 
   Upload, 
   Zap, 
   RefreshCw, 
-  BrainCircuit, 
-  Wand2, 
-  RotateCcw, 
   Edit2, 
   Trash2, 
   List, 
   Eraser, 
   Plus, 
-  Check, 
-  X,
   Regex,
-  Layout,
-  Eye,
-  EyeOff,
   Sparkles,
   Loader2,
   Save,
   Database,
+  Cloud,
+  CloudOff,
+  LogOut,
+  Info,
   Key,
-  Lock,
-  ChevronRight
+  CheckCircle,
+  AlertCircle,
+  Globe
 } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 
 interface SettingsViewProps {
   activeSession: Session;
@@ -48,9 +41,13 @@ interface SettingsViewProps {
   onUpdateDashboardWidgets: (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => void;
   transactions: Transaction[];
   onDeleteSource: (sourceName: string) => void;
+  googleUser: GoogleUser | null;
+  onGoogleLogin: () => void;
+  onCloudSave: () => void;
+  onCloudLoad: () => void;
+  isSyncing: boolean;
+  onUpdateCurrency: (currency: string) => void;
 }
-
-const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 const SettingsView: React.FC<SettingsViewProps> = ({
   activeSession,
@@ -66,12 +63,38 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onSanitizeCategories,
   onUpdateDashboardWidgets,
   transactions,
-  onDeleteSource
+  onDeleteSource,
+  googleUser,
+  onGoogleLogin,
+  onCloudSave,
+  onCloudLoad,
+  isSyncing,
+  onUpdateCurrency
 }) => {
-  const [editingCategory, setEditingCategory] = useState<{ oldName: string, newName: string } | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newRule, setNewRule] = useState<{ keyword: string, category: string, isRegex: boolean }>({ keyword: '', category: '', isRegex: false });
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkApiKey = async () => {
+        if (window.aistudio) {
+            const has = await window.aistudio.hasSelectedApiKey();
+            setHasApiKey(has);
+        }
+    };
+    checkApiKey();
+    const interval = setInterval(checkApiKey, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSelectApiKey = async () => {
+    if (window.aistudio) {
+        await window.aistudio.openSelectKey();
+        const has = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(has);
+    }
+  };
 
   const handleAddOrUpdateRule = () => {
     if (!newRule.keyword.trim() || !newRule.category) return;
@@ -123,10 +146,225 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const currencyOptions = [
+      { code: '$', label: 'USD/CAD/AUD ($)' },
+      { code: '€', label: 'Euro (€)' },
+      { code: '£', label: 'Pound (£)' },
+      { code: '¥', label: 'Yen (¥)' },
+      { code: '₹', label: 'Rupee (₹)' },
+      { code: 'CHF', label: 'Swiss Franc (CHF)' },
+      { code: 'kr', label: 'Krona (kr)' },
+      { code: 'R$', label: 'Real (R$)' },
+  ];
+
   return (
     <div className="space-y-8 animate-fade-in pb-20">
       
-      {/* 1. Categorization Rules */}
+      {/* 1. AI Configuration */}
+      <section className="bg-surface rounded-xl border border-indigo-500/30 overflow-hidden shadow-lg shadow-indigo-500/5">
+        <div className="p-6 border-b border-indigo-500/20 bg-indigo-500/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                    <Key size={24} />
+                </div>
+                <div>
+                    <h3 className="text-xl font-bold text-white">AI Reasoning Service</h3>
+                    <p className="text-sm text-slate-400">Configure your Google Gemini credentials.</p>
+                </div>
+            </div>
+        </div>
+        <div className="p-6 flex flex-col md:flex-row gap-6 items-center">
+            <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-300 font-medium">Service Provider:</span>
+                    <span className="text-xs bg-slate-800 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/20 font-bold uppercase tracking-wider">Google Gemini API</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-300 font-medium">Configuration Status:</span>
+                    {hasApiKey ? (
+                        <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold">
+                            <CheckCircle size={14} /> Active & Configured
+                        </span>
+                    ) : (
+                        <span className="text-xs text-amber-400 flex items-center gap-1 font-bold">
+                            <AlertCircle size={14} /> Key Selection Pending
+                        </span>
+                    )}
+                </div>
+                <p className="text-[11px] text-slate-500 italic max-w-lg">
+                    The API token is securely managed by the environment. Your key is never saved in the session JSON or shared with 3rd parties.
+                </p>
+            </div>
+            
+            <button 
+                onClick={handleSelectApiKey}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 border border-indigo-400/30"
+            >
+                <Key size={18} />
+                {hasApiKey ? 'Change API Key' : 'Configure API Key'}
+            </button>
+        </div>
+      </section>
+
+      {/* 2. Google Drive Sync */}
+      <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
+        <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                    <Cloud size={24} />
+                </div>
+                <div>
+                    <h3 className="text-xl font-bold text-white">Google Drive Sync</h3>
+                    <p className="text-sm text-slate-400">Keep your finances backed up and synced across devices.</p>
+                </div>
+            </div>
+            {googleUser && (
+                <button className="text-xs text-slate-500 hover:text-red-400 flex items-center gap-1 transition-colors">
+                    <LogOut size={14} /> Disconnect
+                </button>
+            )}
+        </div>
+        <div className="p-6">
+            {!googleUser ? (
+                <div className="flex flex-col items-center py-8 text-center max-w-sm mx-auto">
+                    <div className="bg-slate-900 p-4 rounded-full mb-4">
+                        <CloudOff size={48} className="text-slate-600" />
+                    </div>
+                    <h4 className="text-white font-bold mb-2">Cloud Storage is Disabled</h4>
+                    <p className="text-sm text-slate-400 mb-6">
+                        Log in with your Google account to save your sessions to a private file in your Google Drive.
+                    </p>
+                    <button 
+                        onClick={onGoogleLogin}
+                        className="bg-white hover:bg-slate-100 text-slate-900 px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition-all shadow-xl"
+                    >
+                        <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-5 h-5" alt="google" />
+                        Sign in with Google
+                    </button>
+                </div>
+            ) : (
+                <div className="flex flex-col md:flex-row gap-8 items-center">
+                    <div className="flex items-center gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700 flex-1 w-full">
+                        <img src={googleUser.picture} className="w-16 h-16 rounded-full border-2 border-indigo-500 shadow-lg shadow-indigo-500/20" alt="profile" />
+                        <div>
+                            <h4 className="text-white font-bold">{googleUser.name}</h4>
+                            <p className="text-sm text-slate-500">{googleUser.email}</p>
+                            <div className="mt-2 text-[10px] text-indigo-400 font-bold flex items-center gap-1 uppercase tracking-widest">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                                Authenticated
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3 w-full md:w-auto min-w-[200px]">
+                        <button 
+                            onClick={onCloudSave}
+                            disabled={isSyncing}
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20"
+                        >
+                            {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                            Save to Cloud
+                        </button>
+                        <button 
+                            onClick={onCloudLoad}
+                            disabled={isSyncing}
+                            className="bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 border border-slate-700 transition-all"
+                        >
+                            <Download size={18} />
+                            Load from Cloud
+                        </button>
+                    </div>
+                </div>
+            )}
+            
+            <div className="mt-6 pt-6 border-t border-slate-800 flex items-center gap-2 text-[11px] text-slate-500">
+                <Info size={14} />
+                <span>
+                    We only request access to files created by this app (<code>finsight_backup_cloud.json</code>). 
+                    Your privacy is protected by the Google Drive "file-scope" permission.
+                </span>
+            </div>
+        </div>
+      </section>
+
+      {/* 3. Session Data (Import/Export/Currency) */}
+      <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
+         <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="bg-amber-500/20 p-2 rounded-lg text-amber-400">
+                    <Database size={24} />
+                </div>
+                <div>
+                    <h3 className="text-xl font-bold text-white">Session Data</h3>
+                    <p className="text-sm text-slate-400">Manage sources, currency, and backup.</p>
+                </div>
+            </div>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-bold border border-slate-600 transition-all cursor-pointer">
+                  <Upload size={18} /> Import Session
+                  <input type="file" accept=".json" onChange={onImportSession} className="hidden" />
+              </label>
+              <button onClick={onExportSession} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-500/20">
+                  <Download size={18} /> Export Session
+              </button>
+            </div>
+        </div>
+        <div className="p-6">
+            
+            {/* Currency Selector */}
+            <div className="mb-8 border-b border-slate-700 pb-6">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Globe size={14} /> Currency & Region
+                </h4>
+                <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 flex items-center justify-between max-w-xl">
+                    <div>
+                        <p className="text-white font-medium text-sm">Display Symbol</p>
+                        <p className="text-xs text-slate-500">Changes the currency symbol across the dashboard.</p>
+                    </div>
+                    <select 
+                        value={activeSession.currency || '$'}
+                        onChange={(e) => onUpdateCurrency(e.target.value)}
+                        className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                    >
+                        {currencyOptions.map(opt => (
+                            <option key={opt.code} value={opt.code}>{opt.label}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Imported Sources</h4>
+            <div className="space-y-3 max-w-2xl">
+                {(activeSession.sources || []).map(source => (
+                    <div key={source} className="flex items-center justify-between bg-slate-900 border border-slate-700 rounded-xl p-4 group">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400"><FileJson size={20}/></div>
+                            <div>
+                                <h5 className="font-bold text-white text-sm">{source}</h5>
+                                <p className="text-[10px] text-slate-500">
+                                    {transactions.filter(t => t.source === source).length} transactions linked
+                                </p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => onDeleteSource(source)}
+                            className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title="Delete Source & Transactions"
+                        >
+                            <Trash2 size={18} />
+                        </button>
+                    </div>
+                ))}
+                {(activeSession.sources || []).length === 0 && (
+                    <div className="text-center p-8 bg-slate-900 border-2 border-dashed border-slate-800 rounded-xl text-slate-600">
+                        No external sources imported yet.
+                    </div>
+                )}
+            </div>
+        </div>
+      </section>
+
+      {/* 4. Categorization Rules */}
       <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
         <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -242,7 +480,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </section>
 
-      {/* 2. Category Manager */}
+      {/* 5. Category Manager */}
       <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
          <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -285,60 +523,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                         </div>
                     </div>
                 ))}
-            </div>
-        </div>
-      </section>
-
-      {/* 3. Import/Export Sources */}
-      <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
-         <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="bg-amber-500/20 p-2 rounded-lg text-amber-400">
-                    <Database size={24} />
-                </div>
-                <div>
-                    <h3 className="text-xl font-bold text-white">Session Data</h3>
-                    <p className="text-sm text-slate-400">Manage imported sources and backup your session.</p>
-                </div>
-            </div>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-bold border border-slate-600 transition-all cursor-pointer">
-                  <Upload size={18} /> Import Session
-                  <input type="file" accept=".json" onChange={onImportSession} className="hidden" />
-              </label>
-              <button onClick={onExportSession} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-500/20">
-                  <Download size={18} /> Export Session
-              </button>
-            </div>
-        </div>
-        <div className="p-6">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Imported Sources</h4>
-            <div className="space-y-3 max-w-2xl">
-                {(activeSession.sources || []).map(source => (
-                    <div key={source} className="flex items-center justify-between bg-slate-900 border border-slate-700 rounded-xl p-4 group">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400"><FileJson size={20}/></div>
-                            <div>
-                                <h5 className="font-bold text-white text-sm">{source}</h5>
-                                <p className="text-[10px] text-slate-500">
-                                    {transactions.filter(t => t.source === source).length} transactions linked
-                                </p>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => onDeleteSource(source)}
-                            className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                            title="Delete Source & Transactions"
-                        >
-                            <Trash2 size={18} />
-                        </button>
-                    </div>
-                ))}
-                {(activeSession.sources || []).length === 0 && (
-                    <div className="text-center p-8 bg-slate-900 border-2 border-dashed border-slate-800 rounded-xl text-slate-600">
-                        No external sources imported yet.
-                    </div>
-                )}
             </div>
         </div>
       </section>

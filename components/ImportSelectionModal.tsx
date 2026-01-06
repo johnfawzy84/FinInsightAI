@@ -9,7 +9,6 @@ interface ImportSelectionModalProps {
 }
 
 export const ImportSelectionModal: React.FC<ImportSelectionModalProps> = ({ importData, onConfirm, onCancel }) => {
-  // Fix: Added missing 'budgets' property to match ImportSelection interface
   const [selection, setSelection] = useState<ImportSelection>({
     transactions: true,
     categories: true,
@@ -43,7 +42,7 @@ export const ImportSelectionModal: React.FC<ImportSelectionModalProps> = ({ impo
           </p>
         </div>
 
-        <div className="p-6 space-y-3 overflow-y-auto">
+        <div className="p-6 space-y-3 overflow-y-auto custom-scrollbar">
           {/* Transactions */}
           <div 
             onClick={() => handleToggle('transactions')}

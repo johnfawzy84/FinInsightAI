@@ -1,16 +1,17 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Goal, Asset, Transaction, TransactionType } from '../types';
 import { predictRecurringExpenses } from '../services/gemini';
-import { Target, Plus, TrendingUp, AlertCircle, CheckCircle, BrainCircuit, X, Trash2, Calendar, Coins, AlertTriangle, Shield, Wallet, Info, ChevronDown, ChevronUp, Loader2, ArrowRight, Edit2, Save, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Target, Plus, TrendingUp, AlertCircle, CheckCircle, BrainCircuit, X, Trash2, Calendar, Coins, AlertTriangle, Shield, Wallet, Info, ChevronDown, ChevronUp, Loader2, ArrowRight, Edit2, Save, ArrowUpRight, ArrowDownLeft, Link } from 'lucide-react';
 
 interface GoalManagerProps {
   goals: Goal[];
   assets: Asset[];
   transactions: Transaction[];
   onUpdateGoals: (updater: (goals: Goal[]) => Goal[]) => void;
+  currency: string;
 }
 
-export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transactions, onUpdateGoals }) => {
+export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transactions, onUpdateGoals, currency }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null); // Track if editing via Modal
   
@@ -28,10 +29,14 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
     priority: 3,
     icon: '🎯',
     quickAdjustStep: 100,
-    savingRule: { amount: 0, frequency: 'monthly' }
+    savingRule: { amount: 0, frequency: 'monthly' },
+    linkedPocketId: ''
   };
 
   const [currentGoal, setCurrentGoal] = useState<Partial<Goal>>(defaultGoal);
+
+  // Filter for available pockets
+  const pockets = useMemo(() => goals.filter(g => g.type === 'POCKET'), [goals]);
 
   // AI State
   const [recurringData, setRecurringData] = useState<{ 
@@ -124,7 +129,8 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
             priority: Number(currentGoal.priority),
             quickAdjustStep: Number(currentGoal.quickAdjustStep),
             // Ensure icons match type if not manually set (basic logic)
-            icon: currentGoal.icon || (currentGoal.type === 'POCKET' ? '🛡️' : '🎯')
+            icon: currentGoal.icon || (currentGoal.type === 'POCKET' ? '🛡️' : '🎯'),
+            linkedPocketId: currentGoal.linkedPocketId
         } as Goal : g));
     } else {
         // Create new
@@ -138,7 +144,8 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
             priority: currentGoal.priority || 3,
             icon: currentGoal.icon || (currentGoal.type === 'POCKET' ? '🛡️' : '🎯'),
             quickAdjustStep: Number(currentGoal.quickAdjustStep || 100),
-            savingRule: currentGoal.savingRule
+            savingRule: currentGoal.savingRule,
+            linkedPocketId: currentGoal.linkedPocketId
         }]);
     }
 
@@ -225,7 +232,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
     } else {
         // Shortfall
         const shortfall = goal.targetAmount - projectedTotal;
-        return { status: 'yellow', msg: `Shortfall -$${shortfall.toLocaleString(undefined, {maximumFractionDigits:0})}` };
+        return { status: 'yellow', msg: `Shortfall -${currency}${shortfall.toLocaleString(undefined, {maximumFractionDigits:0})}` };
     }
   };
 
@@ -242,6 +249,8 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
       else if (feasibility.status === 'yellow') { statusColor = 'bg-amber-500'; borderColor = 'border-amber-500/30'; }
       else if (feasibility.status === 'red') { statusColor = 'bg-red-500'; borderColor = 'border-red-500/30'; }
       else if (feasibility.status === 'blue') { statusColor = 'bg-cyan-500'; borderColor = 'border-cyan-500/30'; }
+
+      const linkedPocket = goal.linkedPocketId ? pockets.find(p => p.id === goal.linkedPocketId) : null;
 
       return (
         <div key={goal.id} className={`bg-surface rounded-xl border ${borderColor} p-6 shadow-lg relative group transition-all hover:border-opacity-100`}>
@@ -268,14 +277,19 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                             )}
                             {goal.savingRule && goal.savingRule.amount > 0 && (
                                 <span className="text-xs text-indigo-300 flex items-center gap-1">
-                                    <TrendingUp size={12}/> Rule: Save ${goal.savingRule.amount}/{goal.savingRule.frequency}
+                                    <TrendingUp size={12}/> Rule: Save {currency}{goal.savingRule.amount}/{goal.savingRule.frequency}
+                                </span>
+                            )}
+                            {linkedPocket && (
+                                <span className="text-xs text-indigo-300 flex items-center gap-1 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 w-fit mt-1">
+                                    <Link size={10}/> Linked to: {linkedPocket.icon} {linkedPocket.title}
                                 </span>
                             )}
                         </div>
                     </div>
                 </div>
                 <div className="text-right">
-                    <div className="text-2xl font-bold text-white">${goal.targetAmount.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-white">{currency}{goal.targetAmount.toLocaleString()}</div>
                     <div className={`text-xs font-bold ${feasibility.status === 'green' ? 'text-emerald-400' : 'text-slate-400'} ${feasibility.status === 'yellow' ? 'text-amber-400' : ''} ${feasibility.status === 'red' ? 'text-red-400' : ''}`}>
                         {feasibility.msg}
                     </div>
@@ -309,7 +323,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                                 className="text-white font-mono font-bold hover:text-indigo-400 cursor-pointer border border-transparent hover:border-slate-700 rounded px-1"
                                 title="Click to edit"
                             >
-                                ${goal.allocatedAmount.toLocaleString()}
+                                {currency}{goal.allocatedAmount.toLocaleString()}
                             </div>
                         )}
                     </div>
@@ -321,7 +335,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                     </button>
                  </div>
                  <div className="text-xs text-slate-500 text-right">
-                     Step: ${goal.quickAdjustStep || 100}
+                     Step: {currency}{goal.quickAdjustStep || 100}
                  </div>
             </div>
 
@@ -343,7 +357,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                 <div className="mt-4 pt-4 border-t border-slate-700 animate-fade-in space-y-4">
                     {/* Full Slider */}
                     <div>
-                        <label className="text-xs text-slate-500 uppercase font-semibold mb-1 block">Precise Allocation</label>
+                        <label className="text-xs text-slate-500 uppercase font-semibold mb-1 block">Precise Allocation {linkedPocket && '(Updates Pocket)'}</label>
                         <input 
                             type="range" 
                             min="0" 
@@ -382,11 +396,11 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
         {/* 1. Liquid Assets */}
         <div className="bg-surface p-5 rounded-xl border border-slate-700 shadow-lg">
             <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Liquid Savings Pool</h3>
-            <div className="text-2xl font-bold text-white mb-1">${totalLiquidAssets.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-white mb-1">{currency}{totalLiquidAssets.toLocaleString()}</div>
             <div className="flex justify-between text-xs mt-2 pt-2 border-t border-slate-700/50">
                 <span className="text-slate-500">Unallocated</span>
                 <span className={`font-mono font-bold ${unallocatedFunds < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                    ${unallocatedFunds.toLocaleString()}
+                    {currency}{unallocatedFunds.toLocaleString()}
                 </span>
             </div>
         </div>
@@ -398,7 +412,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                 <Info size={12} className="text-slate-500 cursor-help" />
             </div>
             <div className={`text-2xl font-bold ${monthlySavingsRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                ${monthlySavingsRate.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                {currency}{monthlySavingsRate.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </div>
             
             {/* Tooltip */}
@@ -412,12 +426,12 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
             <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Current Month Forecast</h3>
             <div className="flex justify-between items-end mb-1">
                 <span className="text-xs text-slate-500">Actual Surplus</span>
-                <span className={`font-bold ${currentMonthSnapshot.surplus >= 0 ? 'text-white' : 'text-red-400'}`}>${currentMonthSnapshot.surplus.toLocaleString()}</span>
+                <span className={`font-bold ${currentMonthSnapshot.surplus >= 0 ? 'text-white' : 'text-red-400'}`}>{currency}{currentMonthSnapshot.surplus.toLocaleString()}</span>
             </div>
             {recurringData && (
                 <div className="flex justify-between items-end text-xs pt-1 border-t border-slate-700/50">
                     <span className="text-indigo-400">Expected End</span>
-                    <span className="font-mono">~${(currentMonthSnapshot.income - recurringData.total).toLocaleString()}</span>
+                    <span className="font-mono">~{currency}{(currentMonthSnapshot.income - recurringData.total).toLocaleString()}</span>
                 </div>
             )}
         </div>
@@ -435,18 +449,18 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                     <div className="flex justify-between items-end mb-1">
                         <div>
                             <div className="text-xs text-slate-400">Fixed Spend</div>
-                            <div className="text-lg font-bold text-red-300">-${recurringData.total.toLocaleString()}</div>
+                            <div className="text-lg font-bold text-red-300">-{currency}{recurringData.total.toLocaleString()}</div>
                         </div>
                         <div className="text-right">
                             <div className="text-xs text-slate-400">Exp. Income</div>
-                            <div className="text-lg font-bold text-emerald-300">+${recurringData.expectedIncome.toLocaleString()}</div>
+                            <div className="text-lg font-bold text-emerald-300">+{currency}{recurringData.expectedIncome.toLocaleString()}</div>
                         </div>
                     </div>
                     
                     <div className="pt-2 border-t border-indigo-500/20 mt-1 flex justify-between items-center">
                         <span className="text-xs text-indigo-200">Baseline Surplus:</span>
                         <span className={`font-bold ${recurringData.expectedIncome - recurringData.total >= 0 ? 'text-white' : 'text-red-400'}`}>
-                            ${(recurringData.expectedIncome - recurringData.total).toLocaleString()}
+                            {currency}{(recurringData.expectedIncome - recurringData.total).toLocaleString()}
                         </span>
                     </div>
 
@@ -458,7 +472,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                                 <div key={idx} className="flex justify-between text-xs">
                                     <span className="text-slate-400">{item.category} ({item.reason})</span>
                                     <span className={`${item.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {item.type === 'income' ? '+' : '-'}${item.amount}
+                                        {item.type === 'income' ? '+' : '-'}{currency}{item.amount}
                                     </span>
                                 </div>
                             ))}
@@ -542,6 +556,30 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                         <input type="text" value={currentGoal.title} onChange={e => setCurrentGoal({...currentGoal, title: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:border-indigo-500 outline-none" placeholder={currentGoal.type === 'POCKET' ? "e.g. Emergency Fund" : "e.g. Hawaii Trip"}/>
                     </div>
 
+                    {/* Linked Pocket (Only for Goals) */}
+                    {currentGoal.type === 'GOAL' && (
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1 flex items-center gap-1">
+                                <Link size={12} /> Link to Pocket (Optional)
+                            </label>
+                            <select 
+                                value={currentGoal.linkedPocketId || ''}
+                                onChange={e => setCurrentGoal({...currentGoal, linkedPocketId: e.target.value})}
+                                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:border-indigo-500 outline-none text-sm"
+                            >
+                                <option value="">-- No linked pocket --</option>
+                                {pockets.map(p => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.icon} {p.title} (Available: {currency}{p.allocatedAmount.toLocaleString()})
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-slate-500 mt-1">
+                                Link this goal to a specific reserve (e.g. 'Vacation Fund') to track funding source.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs text-slate-400 block mb-1">Target Amount</label>
@@ -573,7 +611,7 @@ export const GoalManager: React.FC<GoalManagerProps> = ({ goals, assets, transac
                         <div>
                             <label className="text-xs text-slate-500 block mb-1">Saving Rule (Monthly)</label>
                             <div className="flex items-center gap-2">
-                                <span className="text-slate-400 text-sm">Save $</span>
+                                <span className="text-slate-400 text-sm">Save {currency}</span>
                                 <input 
                                     type="number" 
                                     value={currentGoal.savingRule?.amount || 0} 
