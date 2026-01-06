@@ -1,5 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction, CategorizationRule, Budget } from "../types";
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+import { Transaction, CategorizationRule, Budget, Goal } from "../types";
 
 // Always use named parameters and exclusively get the API key from process.env.API_KEY.
 const getAI = () => {
@@ -8,6 +8,79 @@ const getAI = () => {
   }
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
+
+const CONSULTANT_TOOLS: FunctionDeclaration[] = [
+  {
+    name: 'create_chart_widget',
+    description: 'Create a visual chart on the dashboard to help the user understand their data. Use this when the user asks to see, visualize, or graph something.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING, description: "A short, descriptive title for the chart" },
+        query: { type: Type.STRING, description: "The natural language query to generate the data, e.g. 'Spending on Food vs Transport in 2023'" },
+      },
+      required: ['title', 'query']
+    }
+  },
+  {
+    name: 'manage_category',
+    description: 'Add, remove, or rename a transaction category.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        action: { type: Type.STRING, enum: ['add', 'remove', 'rename'] },
+        category: { type: Type.STRING, description: "The category to act upon" },
+        newCategoryName: { type: Type.STRING, description: "Required only for 'rename' action" }
+      },
+      required: ['action', 'category']
+    }
+  },
+  {
+    name: 'add_rule',
+    description: 'Add a new auto-categorization rule.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        keyword: { type: Type.STRING, description: "The text to look for in transaction descriptions (case-insensitive)" },
+        category: { type: Type.STRING, description: "The target category" },
+        isRegex: { type: Type.BOOLEAN, description: "Whether the keyword is a regular expression" }
+      },
+      required: ['keyword', 'category']
+    }
+  },
+  {
+    name: 'manage_budget',
+    description: 'Create, update, or remove a spending budget.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        action: { type: Type.STRING, enum: ['add', 'update', 'remove'] },
+        category: { type: Type.STRING, description: "The category for the budget" },
+        limit: { type: Type.NUMBER, description: "The spending limit amount" },
+        period: { type: Type.STRING, enum: ['monthly', 'yearly'] }
+      },
+      required: ['action', 'category']
+    }
+  },
+  {
+    name: 'manage_goal',
+    description: 'Create, update, or remove a savings goal or pocket. Use update to modify existing ones.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        action: { type: Type.STRING, enum: ['add', 'update', 'remove'] },
+        title: { type: Type.STRING, description: "Name of the goal/pocket (must match existing name to update)" },
+        targetAmount: { type: Type.NUMBER },
+        type: { type: Type.STRING, enum: ['GOAL', 'POCKET'] },
+        priority: { type: Type.NUMBER },
+        targetDate: { type: Type.STRING, description: "YYYY-MM-DD" },
+        savingRuleAmount: { type: Type.NUMBER, description: "Monthly saving amount" },
+        savingRuleFrequency: { type: Type.STRING, enum: ['monthly', 'once', 'custom'] }
+      },
+      required: ['action', 'title']
+    }
+  }
+];
 
 export const proposeBudgetsAI = async (
   transactions: Transaction[],
@@ -275,8 +348,9 @@ export const analyzeFinancesDeeply = async (
 export const chatWithFinanceAssistant = async (
   history: { role: 'user' | 'model'; content: string }[],
   currentMessage: string,
-  transactions: Transaction[]
-): Promise<{ text: string, groundingChunks?: any[] }> => {
+  transactions: Transaction[],
+  contextData: { goals: Goal[], budgets: Budget[], categories: string[] }
+): Promise<{ text?: string, groundingChunks?: any[], functionCalls?: any[] }> => {
     
   const ai = getAI();
   const count = transactions.length;
@@ -291,6 +365,10 @@ export const chatWithFinanceAssistant = async (
       type: t.type
   })));
 
+  const goalsStr = JSON.stringify(contextData.goals.map(g => ({ title: g.title, target: g.targetAmount, saved: g.allocatedAmount, type: g.type, rule: g.savingRule })));
+  const budgetsStr = JSON.stringify(contextData.budgets);
+  const catsStr = JSON.stringify(contextData.categories);
+
   const systemInstruction = `
     You are a helpful financial assistant with access to Google Search and the user's transaction data.
     
@@ -299,11 +377,18 @@ export const chatWithFinanceAssistant = async (
     - Date Range Available: ${startDate} to ${endDate}
     - Today's Date: ${new Date().toISOString().split('T')[0]}
 
+    CURRENT STATE (Read this to decide between add/update):
+    - Existing Goals/Pockets: ${goalsStr}
+    - Existing Budgets: ${budgetsStr}
+    - Categories: ${catsStr}
+
     INSTRUCTIONS:
     1. If the user asks about their spending, income, or specific transactions, base your answer PRIMARILY on the provided JSON data.
     2. If the user asks about general financial concepts (e.g., "current inflation rate", "what is an ETF"), market data, or facts not in the database, use Google Search to provide up-to-date information.
-    3. If the user asks about a month or year NOT in the "Date Range Available", explicitly state that you have no personal data for that period, but you can provide general advice or search for trends if asked.
-    4. Keep answers concise unless asked for detail.
+    3. If the user asks to visualize data, create a chart, add a budget, change a category, or set a goal, USE THE PROVIDED TOOLS.
+    4. Do not simply describe how to do it; use the tool to propose the action.
+    5. CHECK "CURRENT STATE" first. If a goal with a similar name exists, use 'update' action instead of 'add'.
+    6. If the user asks to "save X amount monthly", update the goal's savingRuleAmount using the 'manage_goal' tool.
     
     TRANSACTION DATA (JSON):
     ${dataStr}
@@ -318,13 +403,33 @@ export const chatWithFinanceAssistant = async (
         ],
         config: { 
             systemInstruction,
-            tools: [{ googleSearch: {} }]
+            tools: [
+                { googleSearch: {} }, 
+                { functionDeclarations: CONSULTANT_TOOLS }
+            ]
         }
     });
 
+    // Parse Response for Text and Function Calls
+    let text = "";
+    let functionCalls: any[] = [];
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+
+    if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
+        for (const part of response.candidates[0].content.parts) {
+            if (part.text) {
+                text += part.text;
+            }
+            if (part.functionCall) {
+                functionCalls.push(part.functionCall);
+            }
+        }
+    }
+
     return { 
-        text: response.text || "I couldn't generate a response.",
-        groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks
+        text: text || (functionCalls.length > 0 ? "I've prepared a proposal for you." : "I couldn't generate a response."),
+        groundingChunks: chunks,
+        functionCalls: functionCalls.length > 0 ? functionCalls : undefined
     };
   } catch (error) {
     console.error("Chat error:", error);

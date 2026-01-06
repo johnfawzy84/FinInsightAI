@@ -350,6 +350,15 @@ const App: React.FC = () => {
             transactions={activeSession.transactions} 
             isOpen={isChatOpen} 
             onClose={() => setIsChatOpen(false)}
+            onUpdateDashboardWidgets={updateDashboardWidgets}
+            onUpdateRules={updateRules}
+            onUpdateCategories={updateCategories}
+            onUpdateBudgets={updateBudgets}
+            onUpdateGoals={updateGoals}
+            goals={activeSession.goals || []}
+            budgets={activeSession.budgets || []}
+            categories={activeSession.categories}
+            currency={activeSession.currency || '$'}
         />
         
         {!isChatOpen && (
