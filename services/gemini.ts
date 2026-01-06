@@ -1,12 +1,22 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { Transaction, CategorizationRule, Budget, Goal } from "../types";
 
-// Always use named parameters and exclusively get the API key from process.env.API_KEY.
+// Helper to retrieve API Key from environment or local storage
+const getApiKey = (): string | null => {
+  // Check process.env first
+  if (process.env.API_KEY && process.env.API_KEY.length > 0) {
+    return process.env.API_KEY;
+  }
+  // Fallback to localStorage for manual entry support
+  return localStorage.getItem('gemini_api_key');
+};
+
 const getAI = () => {
-  if (!process.env.API_KEY) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     throw new Error("Gemini API Key is not configured. Please set it in Settings.");
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey });
 };
 
 const CONSULTANT_TOOLS: FunctionDeclaration[] = [
@@ -433,7 +443,7 @@ export const chatWithFinanceAssistant = async (
     };
   } catch (error) {
     console.error("Chat error:", error);
-    return { text: "I'm having trouble connecting to the AI service right now." };
+    return { text: "I'm having trouble connecting to the AI service right now. Please check your API Key in Settings." };
   }
 };
 
