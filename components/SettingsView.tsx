@@ -79,16 +79,30 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [newRule, setNewRule] = useState<{ keyword: string, category: string, isRegex: boolean }>({ keyword: '', category: '', isRegex: false });
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [keySource, setKeySource] = useState<'env' | 'local' | 'none'>('none');
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
 
   // Check for API key on mount
   useEffect(() => {
     const checkApiKey = () => {
-        // Check env var or local storage
-        const hasEnv = process.env.API_KEY && process.env.API_KEY.length > 0;
-        const hasLocal = !!localStorage.getItem('gemini_api_key');
-        setHasApiKey(!!hasEnv || hasLocal);
+        // Check local storage first (Priority)
+        const localKey = localStorage.getItem('gemini_api_key');
+        if (localKey && localKey.length > 0) {
+            setKeySource('local');
+            setHasApiKey(true);
+            return;
+        }
+
+        // Fallback to env
+        if (process.env.API_KEY && process.env.API_KEY.length > 0) {
+            setKeySource('env');
+            setHasApiKey(true);
+            return;
+        }
+
+        setKeySource('none');
+        setHasApiKey(false);
     };
     checkApiKey();
     // Re-check periodically in case it changes
@@ -105,9 +119,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const handleSaveApiKey = () => {
       if (tempApiKey.trim()) {
           localStorage.setItem('gemini_api_key', tempApiKey.trim());
+          setKeySource('local');
       } else {
           localStorage.removeItem('gemini_api_key');
+          // If removed local, see if env exists
+          if (process.env.API_KEY && process.env.API_KEY.length > 0) {
+              setKeySource('env');
+          } else {
+              setKeySource('none');
+          }
       }
+      // Trigger instant re-render check
       setHasApiKey(!!tempApiKey.trim() || (!!process.env.API_KEY && process.env.API_KEY.length > 0));
       setShowApiKeyModal(false);
   };
@@ -232,7 +254,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="text-sm text-slate-300 font-medium">Configuration Status:</span>
                     {hasApiKey ? (
                         <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold">
-                            <CheckCircle size={14} /> Active & Configured
+                            <CheckCircle size={14} /> Active
                         </span>
                     ) : (
                         <span className="text-xs text-amber-400 flex items-center gap-1 font-bold">
@@ -240,8 +262,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                         </span>
                     )}
                 </div>
-                <p className="text-[11px] text-slate-500 italic max-w-lg">
-                    The API token is securely managed by the environment or your browser's local storage. Your key is never saved in the session JSON or shared with 3rd parties.
+                <div className="flex items-center gap-2">
+                     <span className="text-sm text-slate-300 font-medium">Source:</span>
+                     <span className="text-xs text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
+                         {keySource === 'local' ? 'Custom (Browser)' : keySource === 'env' ? 'Environment (System)' : 'None'}
+                     </span>
+                </div>
+                <p className="text-[11px] text-slate-500 italic max-w-lg mt-1">
+                    The API token is securely managed. {keySource === 'local' ? 'Using your custom key from browser storage.' : 'Using the system default key.'}
                 </p>
             </div>
             

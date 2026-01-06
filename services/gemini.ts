@@ -3,12 +3,19 @@ import { Transaction, CategorizationRule, Budget, Goal } from "../types";
 
 // Helper to retrieve API Key from environment or local storage
 const getApiKey = (): string | null => {
-  // Check process.env first
+  // 1. Check localStorage first (User Setting Override)
+  // This allows users to provide their own key if the system key is exhausted/missing
+  const localKey = localStorage.getItem('gemini_api_key');
+  if (localKey && localKey.length > 0) {
+      return localKey;
+  }
+
+  // 2. Fallback to process.env (Build-time or Env configuration)
   if (process.env.API_KEY && process.env.API_KEY.length > 0) {
     return process.env.API_KEY;
   }
-  // Fallback to localStorage for manual entry support
-  return localStorage.getItem('gemini_api_key');
+  
+  return null;
 };
 
 const getAI = () => {
