@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
-import { ArrowUpRight, ArrowDownLeft, ChevronDown, X, Filter, Tag } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ChevronDown, X, Filter, Tag, Plus } from 'lucide-react';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -8,6 +8,7 @@ interface TransactionListProps {
   onCategoryChange: (transactionId: string, newCategory: string) => void;
   onTransactionClick?: (transactionId: string) => void;
   currency: string;
+  onManualAdd?: () => void;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({ 
@@ -15,7 +16,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
   availableCategories, 
   onCategoryChange,
   onTransactionClick,
-  currency
+  currency,
+  onManualAdd
 }) => {
   const [filters, setFilters] = useState({
     date: '',
@@ -72,19 +74,29 @@ const TransactionList: React.FC<TransactionListProps> = ({
   return (
     <div className="bg-surface rounded-xl border border-slate-700 shadow-lg overflow-hidden flex flex-col">
       <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
-        <h3 className="text-xl font-semibold text-white flex items-center gap-2">
-            Transactions 
-            <span className="text-sm font-normal text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
-                {filteredTransactions.length} / {transactions.length}
-            </span>
-        </h3>
-        {hasActiveFilters && (
+        <div className="flex items-center gap-4">
+            <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                Transactions 
+                <span className="text-sm font-normal text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                    {filteredTransactions.length} / {transactions.length}
+                </span>
+            </h3>
+            {hasActiveFilters && (
+                <button 
+                    onClick={clearFilters}
+                    className="flex items-center space-x-1 text-xs text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg border border-slate-600 transition-colors"
+                >
+                    <X size={14} />
+                    <span>Clear Filters</span>
+                </button>
+            )}
+        </div>
+        {onManualAdd && (
             <button 
-                onClick={clearFilters}
-                className="flex items-center space-x-1 text-xs text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg border border-slate-600 transition-colors"
+                onClick={onManualAdd}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all"
             >
-                <X size={14} />
-                <span>Clear Filters</span>
+                <Plus size={16} /> Add Transaction
             </button>
         )}
       </div>

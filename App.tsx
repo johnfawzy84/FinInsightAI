@@ -10,6 +10,7 @@ import SettingsView from './components/SettingsView';
 import { RuleProgressModal, SanitizationProposalModal, SanitizationResultModal, BulkUpdateModal } from './components/StatusModals';
 import { ImportSelectionModal } from './components/ImportSelectionModal';
 import { SmartImportModal } from './components/SmartImportModal';
+import { ManualTransactionModal } from './components/ManualTransactionModal';
 import { useSessionData, applyRulesToTransactions } from './hooks/useSessionData';
 import { categorizeTransactionsAI, generateRulesFromHistory } from './services/gemini';
 import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings, Target, Wallet } from 'lucide-react';
@@ -51,6 +52,7 @@ const App: React.FC = () => {
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
   const [importCandidate, setImportCandidate] = useState<Session | null>(null);
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
+  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
 
   const [bulkUpdateProposal, setBulkUpdateProposal] = useState<{
     targetDescription: string;
@@ -148,6 +150,21 @@ const App: React.FC = () => {
           sources: updatedSources
       }));
       setActiveTab('transactions');
+  };
+
+  const handleAddManualTransaction = (data: any) => {
+      const newTransaction: Transaction = {
+          id: `manual-${Date.now()}`,
+          ...data
+      };
+      
+      // Update transactions
+      updateTransactions(prev => [...prev, newTransaction]);
+      
+      // Update sources if manual entry is new
+      if (newTransaction.source && !activeSession.sources?.includes(newTransaction.source)) {
+          updateSessionRaw(s => ({ ...s, sources: [...(s.sources || []), newTransaction.source!] }));
+      }
   };
 
   const handleAutoCategorize = async () => {
@@ -381,6 +398,14 @@ const App: React.FC = () => {
             existingSources={activeSession.sources || []}
         />
 
+        <ManualTransactionModal 
+            isOpen={isManualAddOpen}
+            onClose={() => setIsManualAddOpen(false)}
+            onSave={handleAddManualTransaction}
+            categories={activeSession.categories}
+            currency={activeSession.currency || '$'}
+        />
+
         <RuleProgressModal 
             status={ruleApplicationStatus} 
             onClose={() => setRuleApplicationStatus(null)} 
@@ -517,6 +542,7 @@ const App: React.FC = () => {
                     onCategoryChange={handleTransactionCategoryChange} 
                     onTransactionClick={setSelectedTransactionId} 
                     currency={activeSession.currency || '$'}
+                    onManualAdd={() => setIsManualAddOpen(true)}
                 />
             )}
             {activeTab === 'budgets' && (
