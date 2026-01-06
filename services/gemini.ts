@@ -1,20 +1,15 @@
 import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
-import { Transaction, CategorizationRule, Budget, Goal } from "../types";
+import { Transaction, CategorizationRule, Budget, Goal, TransactionType } from "../types";
 
 // Helper to retrieve API Key from environment or local storage
 const getApiKey = (): string | null => {
-  // 1. Check localStorage first (User Setting Override)
-  // This allows users to provide their own key if the system key is exhausted/missing
   const localKey = localStorage.getItem('gemini_api_key');
   if (localKey && localKey.length > 0) {
       return localKey;
   }
-
-  // 2. Fallback to process.env (Build-time or Env configuration)
   if (process.env.API_KEY && process.env.API_KEY.length > 0) {
     return process.env.API_KEY;
   }
-  
   return null;
 };
 
@@ -37,7 +32,6 @@ async function callGeminiWithRetry<T>(
   try {
     return await apiCall();
   } catch (error: any) {
-    // Check for 429 (Resource Exhausted) or 503 (Service Unavailable)
     const errorCode = error?.status || error?.error?.code;
     const errorMessage = error?.message || error?.error?.message || '';
     
@@ -46,61 +40,102 @@ async function callGeminiWithRetry<T>(
     if (retries > 0 && isRateLimit) {
       console.warn(`Gemini API Rate Limit hit (${errorCode}). Retrying in ${initialDelay}ms... (${retries} attempts left)`);
       await delay(initialDelay);
-      // Exponential backoff: 2s -> 4s -> 8s
       return callGeminiWithRetry(apiCall, retries - 1, initialDelay * 2);
     }
     throw error;
   }
 }
 
+// --- OPTIMIZATION HELPER ---
+// Condenses transaction history to fit within token limits while preserving recent context
+const prepareEfficientContext = (transactions: Transaction[]) => {
+  // Sort descending (newest first)
+  const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+  if (sorted.length === 0) return { recentJson: "[]", summary: "No data", meta: { count: 0 } };
+
+  // 1. Recent Transactions (Raw details for specific queries)
+  // Limit to last 60 items to keep token count manageable (~1.5k tokens)
+  const recentRaw = sorted.slice(0, 60).map(t => ({
+      d: t.date,
+      desc: t.description,
+      amt: Math.round(t.amount), // Round to save chars
+      cat: t.category,
+      t: t.type === TransactionType.INCOME ? 'INC' : 'EXP' // Abbreviate
+  }));
+
+  // 2. Monthly Aggregates (For trends context)
+  const monthlyStats: Record<string, { inc: number, exp: number }> = {};
+  
+  sorted.slice(60).forEach(t => {
+      const m = t.date.substring(0, 7); // YYYY-MM
+      if (!monthlyStats[m]) monthlyStats[m] = { inc: 0, exp: 0 };
+      
+      if (t.type === TransactionType.INCOME) monthlyStats[m].inc += t.amount;
+      else monthlyStats[m].exp += t.amount;
+  });
+
+  const summaryStr = Object.entries(monthlyStats)
+      .sort((a, b) => b[0].localeCompare(a[0])) // Sort months desc
+      .slice(0, 12) // Last 12 months only
+      .map(([m, s]) => `${m}: +${Math.round(s.inc)} / -${Math.round(s.exp)}`)
+      .join('\n');
+
+  return {
+      recentJson: JSON.stringify(recentRaw),
+      summary: summaryStr,
+      meta: { count: transactions.length, start: sorted[sorted.length-1]?.date, end: sorted[0]?.date }
+  };
+};
+
 const CONSULTANT_TOOLS: FunctionDeclaration[] = [
   {
     name: 'create_chart_widget',
-    description: 'Create a visual chart on the dashboard to help the user understand their data. Use this when the user asks to see, visualize, or graph something.',
+    description: 'Create a visual chart on the dashboard.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        title: { type: Type.STRING, description: "A short, descriptive title for the chart" },
-        query: { type: Type.STRING, description: "The natural language query to generate the data, e.g. 'Spending on Food vs Transport in 2023'" },
+        title: { type: Type.STRING },
+        query: { type: Type.STRING },
       },
       required: ['title', 'query']
     }
   },
   {
     name: 'manage_category',
-    description: 'Add, remove, or rename a transaction category.',
+    description: 'Add, remove, or rename a category.',
     parameters: {
       type: Type.OBJECT,
       properties: {
         action: { type: Type.STRING, enum: ['add', 'remove', 'rename'] },
-        category: { type: Type.STRING, description: "The category to act upon" },
-        newCategoryName: { type: Type.STRING, description: "Required only for 'rename' action" }
+        category: { type: Type.STRING },
+        newCategoryName: { type: Type.STRING }
       },
       required: ['action', 'category']
     }
   },
   {
     name: 'add_rule',
-    description: 'Add a new auto-categorization rule.',
+    description: 'Add auto-categorization rule.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        keyword: { type: Type.STRING, description: "The text to look for in transaction descriptions (case-insensitive)" },
-        category: { type: Type.STRING, description: "The target category" },
-        isRegex: { type: Type.BOOLEAN, description: "Whether the keyword is a regular expression" }
+        keyword: { type: Type.STRING },
+        category: { type: Type.STRING },
+        isRegex: { type: Type.BOOLEAN }
       },
       required: ['keyword', 'category']
     }
   },
   {
     name: 'manage_budget',
-    description: 'Create, update, or remove a spending budget.',
+    description: 'Manage spending budget.',
     parameters: {
       type: Type.OBJECT,
       properties: {
         action: { type: Type.STRING, enum: ['add', 'update', 'remove'] },
-        category: { type: Type.STRING, description: "The category for the budget" },
-        limit: { type: Type.NUMBER, description: "The spending limit amount" },
+        category: { type: Type.STRING },
+        limit: { type: Type.NUMBER },
         period: { type: Type.STRING, enum: ['monthly', 'yearly'] }
       },
       required: ['action', 'category']
@@ -108,17 +143,17 @@ const CONSULTANT_TOOLS: FunctionDeclaration[] = [
   },
   {
     name: 'manage_goal',
-    description: 'Create, update, or remove a savings goal or pocket. Use update to modify existing ones.',
+    description: 'Manage savings goal/pocket.',
     parameters: {
       type: Type.OBJECT,
       properties: {
         action: { type: Type.STRING, enum: ['add', 'update', 'remove'] },
-        title: { type: Type.STRING, description: "Name of the goal/pocket (must match existing name to update)" },
+        title: { type: Type.STRING },
         targetAmount: { type: Type.NUMBER },
         type: { type: Type.STRING, enum: ['GOAL', 'POCKET'] },
         priority: { type: Type.NUMBER },
-        targetDate: { type: Type.STRING, description: "YYYY-MM-DD" },
-        savingRuleAmount: { type: Type.NUMBER, description: "Monthly saving amount" },
+        targetDate: { type: Type.STRING },
+        savingRuleAmount: { type: Type.NUMBER },
         savingRuleFrequency: { type: Type.STRING, enum: ['monthly', 'once', 'custom'] }
       },
       required: ['action', 'title']
@@ -133,21 +168,18 @@ export const proposeBudgetsAI = async (
   if (transactions.length < 5) return [];
 
   const ai = getAI();
-  const recentTx = transactions.slice(-300); 
+  // Limit to recent 200 for proposal to save tokens
+  const recentTx = transactions.slice(-200).map(t => ({
+      c: t.category,
+      a: Math.round(t.amount),
+      d: t.date
+  }));
   
   const prompt = `
-    Analyze these transactions and propose a monthly budget for each category.
-    Look at historical spending patterns. If a category is volatile, suggest a conservative limit.
-    Available Categories: ${availableCategories.join(', ')}
-
-    Return a JSON array of objects:
-    [
-      { "category": "Food & Dining", "limit": 500, "period": "monthly" },
-      ...
-    ]
-
-    Data:
-    ${JSON.stringify(recentTx.map(t => ({ d: t.date, c: t.category, a: t.amount, t: t.type })))}
+    Propose monthly budgets.
+    Cats: ${availableCategories.join(', ')}
+    Data: ${JSON.stringify(recentTx)}
+    Return JSON array: [{ "category": "Food", "limit": 500, "period": "monthly" }]
   `;
 
   try {
@@ -185,16 +217,14 @@ export const categorizeTransactionsAI = async (
   if (transactions.length === 0) return [];
 
   const ai = getAI();
-  const categoryInstruction = availableCategories.length > 0 
-    ? `Classify into one of these exact categories: ${availableCategories.join(', ')}.`
-    : `Categorize into standard personal finance categories (e.g., Food, Transport, Utilities).`;
+  const catStr = availableCategories.join(', ');
 
   const prompt = `
-    You are a financial assistant. ${categoryInstruction}
-    Return a JSON array of objects with 'id' and 'category'.
+    Categorize these transactions into: ${catStr}.
+    Return JSON: [{ "id": "1", "category": "Food" }]
     
-    Transactions:
-    ${JSON.stringify(transactions.map(t => ({ id: t.id, description: t.description, amount: t.amount })))}
+    Tx:
+    ${JSON.stringify(transactions.map(t => ({ id: t.id, d: t.description, a: t.amount })))}
   `;
 
   try {
@@ -233,18 +263,17 @@ export const generateRulesFromHistory = async (
   if (transactions.length < 5) return [];
 
   const ai = getAI();
-  const categorized = transactions.filter(t => 
-    t.category !== 'Uncategorized' && t.category !== 'General'
-  ).slice(0, 100);
+  // Limit input
+  const categorized = transactions
+    .filter(t => t.category !== 'Uncategorized' && t.category !== 'General')
+    .slice(0, 100)
+    .map(t => ({ d: t.description, c: t.category }));
 
   const prompt = `
-    Analyze these categorized transactions and create strict keyword matching rules.
-    Return a JSON array of rules. Each rule should have a 'keyword' (substring to match in description, lowercase) and a 'category'.
-    Only create rules where the pattern is obvious and reliable (e.g., 'uber' -> 'Transportation').
-    Available Categories: ${availableCategories.join(', ')}
-
-    Transactions:
-    ${JSON.stringify(categorized.map(t => ({ d: t.description, c: t.category })))}
+    Create strict keyword rules from this data.
+    Cats: ${availableCategories.join(', ')}
+    Return JSON: [{ "keyword": "uber", "category": "Transport" }]
+    Data: ${JSON.stringify(categorized)}
   `;
 
   try {
@@ -290,33 +319,19 @@ export const predictRecurringExpenses = async (
   if (transactions.length < 5) return { total: 0, expectedIncome: 0, breakdown: [] };
 
   const ai = getAI();
-  const today = new Date();
   const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(today.getMonth() - 3);
+  threeMonthsAgo.setMonth(new Date().getMonth() - 3);
   
-  const recentTx = transactions.filter(t => new Date(t.date) >= threeMonthsAgo);
+  // Limit input to recent 200 items to avoid token overflow
+  const recentTx = transactions
+    .filter(t => new Date(t.date) >= threeMonthsAgo)
+    .slice(0, 200)
+    .map(t => ({ d: t.date, desc: t.description, a: Math.round(t.amount), t: t.type === TransactionType.INCOME ? 'INC' : 'EXP' }));
 
   const prompt = `
-    Analyze these recent transactions to predict the financial baseline for the CURRENT month.
-    
-    1. Identify recurring FIXED expenses (Rent, Internet, Insurance, Subscriptions).
-    2. Estimate essential variable costs (Groceries, Fuel) based on monthly averages.
-    3. Identify recurring INCOME (Salary, Dividends, Regular Transfers).
-    
-    Do NOT include one-off items.
-    
-    Return JSON:
-    {
-      "breakdown": [
-        { "category": "Income", "amount": 5000, "reason": "Monthly Salary", "type": "income" },
-        { "category": "Housing", "amount": 1500, "reason": "Rent", "type": "expense" }
-      ],
-      "totalExpenses": 1900,
-      "totalIncome": 5000
-    }
-
-    Data (d=date, desc=description, amt=amount, t=type):
-    ${JSON.stringify(recentTx.map(t => ({ d: t.date, desc: t.description, amt: t.amount, t: t.type })))}
+    Identify recurring monthly bills/income from this recent data.
+    Return JSON: { "breakdown": [{ "category": "Rent", "amount": 1000, "reason": "Monthly Rent", "type": "expense" }], "totalExpenses": 1000, "totalIncome": 5000 }
+    Data: ${JSON.stringify(recentTx)}
   `;
 
   try {
@@ -344,37 +359,28 @@ export const analyzeFinancesDeeply = async (
   transactions: Transaction[],
   userQuery: string
 ): Promise<{ text: string }> => {
-  if (transactions.length === 0) return { text: "No transaction data available for analysis." };
+  if (transactions.length === 0) return { text: "No transaction data available." };
 
   const ai = getAI();
-  const count = transactions.length;
-  const startDate = transactions[0].date;
-  const endDate = transactions[count - 1].date;
-
-  const transactionSummary = transactions.map(t => 
-    `${t.date}: ${t.description} - $${t.amount} (${t.type}, ${t.category})`
-  ).join('\n');
+  
+  // Use optimized context
+  const context = prepareEfficientContext(transactions);
 
   const prompt = `
-    Analyze the following financial transaction data deeply.
+    Deep financial analysis.
+    Metadata: ${JSON.stringify(context.meta)}
+    Summary History (Monthly):
+    ${context.summary}
     
-    Context Metadata:
-    - Transaction Count: ${count}
-    - Data Time Range: ${startDate} to ${endDate}
-    - Today's Date: ${new Date().toISOString().split('T')[0]}
+    Recent Transactions (Last 60):
+    ${context.recentJson}
     
-    User Question: "${userQuery}"
+    User Query: "${userQuery}"
     
-    Data:
-    ${transactionSummary}
-    
-    Provide a comprehensive, reasoned answer. 
-    IMPORTANT: Only use the provided data. If the user asks about a time period outside the 'Data Time Range', explain that you do not have that data.
-    Identify patterns, anomalies, and actionable advice.
+    Provide a reasoned answer. Use the recent transactions for specifics and summary for trends.
   `;
 
   try {
-    // Reduced thinking budget to prevent TPM exhaustion on free tiers
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: prompt,
@@ -383,10 +389,10 @@ export const analyzeFinancesDeeply = async (
       }
     }));
 
-    return { text: response.text || "I couldn't generate an analysis at this time." };
+    return { text: response.text || "Analysis failed." };
   } catch (error) {
     console.error("Error in deep analysis:", error);
-    return { text: "Sorry, I encountered an error while thinking about your finances. Please try again." };
+    return { text: "Sorry, I encountered an error (likely rate limit). Please try again in a moment." };
   }
 };
 
@@ -398,45 +404,24 @@ export const chatWithFinanceAssistant = async (
 ): Promise<{ text?: string, groundingChunks?: any[], functionCalls?: any[] }> => {
     
   const ai = getAI();
-  const count = transactions.length;
-  const startDate = transactions.length > 0 ? transactions[0].date : 'N/A';
-  const endDate = transactions.length > 0 ? transactions[count - 1].date : 'N/A';
+  
+  // Use optimized context
+  const context = prepareEfficientContext(transactions);
 
-  const dataStr = JSON.stringify(transactions.map(t => ({
-      d: t.date,
-      desc: t.description,
-      amt: t.amount,
-      cat: t.category,
-      type: t.type
-  })));
-
-  const goalsStr = JSON.stringify(contextData.goals.map(g => ({ title: g.title, target: g.targetAmount, saved: g.allocatedAmount, type: g.type, rule: g.savingRule })));
-  const budgetsStr = JSON.stringify(contextData.budgets);
-  const catsStr = JSON.stringify(contextData.categories);
+  const goalsStr = JSON.stringify(contextData.goals.map(g => ({ t: g.title, amt: g.targetAmount, saved: g.allocatedAmount })));
+  const budgetsStr = JSON.stringify(contextData.budgets.map(b => ({ c: b.category, l: b.limit })));
 
   const systemInstruction = `
-    You are a helpful financial assistant with access to Google Search and the user's transaction data.
+    You are a financial assistant.
     
-    DATA METADATA:
-    - Total Transactions: ${count}
-    - Date Range Available: ${startDate} to ${endDate}
-    - Today's Date: ${new Date().toISOString().split('T')[0]}
+    Context:
+    - Recent Tx (Last 60): ${context.recentJson}
+    - History Summary: ${context.summary}
+    - Goals: ${goalsStr}
+    - Budgets: ${budgetsStr}
+    - Today: ${new Date().toISOString().split('T')[0]}
 
-    CURRENT STATE (Read this to decide between add/update):
-    - Existing Goals/Pockets: ${goalsStr}
-    - Existing Budgets: ${budgetsStr}
-    - Categories: ${catsStr}
-
-    INSTRUCTIONS:
-    1. If the user asks about their spending, income, or specific transactions, base your answer PRIMARILY on the provided JSON data.
-    2. If the user asks about general financial concepts (e.g., "current inflation rate", "what is an ETF"), market data, or facts not in the database, use Google Search to provide up-to-date information.
-    3. If the user asks to visualize data, create a chart, add a budget, change a category, or set a goal, USE THE PROVIDED TOOLS.
-    4. Do not simply describe how to do it; use the tool to propose the action.
-    5. CHECK "CURRENT STATE" first. If a goal with a similar name exists, use 'update' action instead of 'add'.
-    6. If the user asks to "save X amount monthly", update the goal's savingRuleAmount using the 'manage_goal' tool.
-    
-    TRANSACTION DATA (JSON):
-    ${dataStr}
+    Answer the user. Use tools for actions. Keep responses concise.
   `;
 
   try {
@@ -455,35 +440,29 @@ export const chatWithFinanceAssistant = async (
         }
     }));
 
-    // Parse Response for Text and Function Calls
     let text = "";
     let functionCalls: any[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
 
     if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
         for (const part of response.candidates[0].content.parts) {
-            if (part.text) {
-                text += part.text;
-            }
-            if (part.functionCall) {
-                functionCalls.push(part.functionCall);
-            }
+            if (part.text) text += part.text;
+            if (part.functionCall) functionCalls.push(part.functionCall);
         }
     }
 
     return { 
-        text: text || (functionCalls.length > 0 ? "I've prepared a proposal for you." : "I couldn't generate a response."),
+        text: text || (functionCalls.length > 0 ? "I've prepared a proposal." : "No response generated."),
         groundingChunks: chunks,
         functionCalls: functionCalls.length > 0 ? functionCalls : undefined
     };
   } catch (error: any) {
     console.error("Chat error:", error);
-    // User-friendly error for quota issues
     const isQuota = error?.status === 429 || error?.error?.code === 429;
     if (isQuota) {
-        return { text: "⚠️ You have exceeded the Gemini API Rate Limit or Quota. Please wait a minute before sending another message, or check your API billing settings." };
+        return { text: "⚠️ You have exceeded the Gemini API Rate Limit (429). Please wait a minute." };
     }
-    return { text: "I'm having trouble connecting to the AI service right now. Please check your API Key in Settings." };
+    return { text: "Connection error. Check API Key." };
   }
 };
 
@@ -492,43 +471,22 @@ export const generateDynamicChart = async (
     userQuery: string
   ): Promise<any> => {
     const ai = getAI();
-    const dataStr = JSON.stringify(transactions.map(t => ({
+    
+    // For charts, we need raw data, but maybe not ALL of it if it's huge.
+    // However, charts usually need specific aggregations. 
+    // We'll send up to 500 recent items for better chart accuracy, condensed.
+    const dataStr = JSON.stringify(transactions.slice(-500).map(t => ({
         d: t.date,
-        a: t.amount,
+        a: Math.round(t.amount),
         c: t.category,
-        t: t.type
+        t: t.type === TransactionType.INCOME ? 'I' : 'E'
     })));
   
     const prompt = `
-      You are a data visualization expert. The user wants to graph their financial data.
-      
-      User Query: "${userQuery}"
-      
-      Raw Data (d=date, a=amount, c=category, t=type):
-      ${dataStr}
-  
-      INSTRUCTIONS:
-      1. Process the Raw Data to answer the User Query (e.g., aggregate by month, filter by category, sum up totals).
-      2. Determine the best chart type: 'bar', 'line', 'area', or 'pie'.
-      3. Create a JSON object compatible with Recharts.
-      4. Colors: Use hex codes like #6366f1 (indigo), #10b981 (emerald), #f59e0b (amber), #ef4444 (red), #ec4899 (pink).
-      
-      OUTPUT SCHEMA (JSON):
-      {
-        "chartType": "bar" | "line" | "area" | "pie",
-        "title": "Short descriptive title",
-        "xAxisKey": "name of the key for x-axis (e.g. 'name', 'date', 'month')",
-        "series": [
-            { "dataKey": "key for value 1", "name": "Legend Name 1", "color": "#hex" },
-            { "dataKey": "key for value 2", "name": "Legend Name 2", "color": "#hex" }
-        ],
-        "data": [
-            { "xAxisKey": "Label 1", "valueKey1": 100, "valueKey2": 50 },
-            ...
-        ]
-      }
-      
-      If the query is impossible to answer with the data, return chartType: "error" and a title explaining why.
+      Create a JSON chart config for Recharts.
+      Query: "${userQuery}"
+      Data: ${dataStr}
+      Output: { "chartType": "bar"|"line"|"pie"|"area", "title": "...", "xAxisKey": "...", "series": [{ "dataKey": "...", "color": "#..." }], "data": [...] }
     `;
   
     try {
@@ -543,6 +501,6 @@ export const generateDynamicChart = async (
       return JSON.parse(response.text || "{}");
     } catch (error) {
       console.error("Error generating chart:", error);
-      return { chartType: "error", title: "Failed to generate chart structure." };
+      return { chartType: "error", title: "Failed to generate chart." };
     }
   };

@@ -11,7 +11,7 @@ import { Transaction, TransactionType, Asset, Session, DashboardWidget } from '.
 import { AssetManagerModal } from './AssetManagerModal';
 import { ExpandedChartModal } from './ExpandedChartModal';
 import { generateDynamicChart, predictRecurringExpenses } from '../services/gemini';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save, Check, X, Maximize2, Shield, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save, Check, X, Maximize2, Shield, ArrowUpRight, ArrowDownLeft, Zap } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -140,7 +140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
   const [editingWidgetId, setEditingWidgetId] = useState<string | null>(null);
   const [editWidgetQuery, setEditWidgetQuery] = useState('');
 
-  // AI Recurring Data
+  // AI Recurring Data (Local state, manual trigger only)
   const [recurringData, setRecurringData] = useState<any>(null);
   const [isLoadingRecurring, setIsLoadingRecurring] = useState(false);
 
@@ -160,20 +160,23 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
     }
   }, [transactions.length]);
 
-  useEffect(() => {
-      const fetchRecurring = async () => {
-          setIsLoadingRecurring(true);
-          try {
-              const res = await predictRecurringExpenses(transactions);
-              setRecurringData(res);
-          } catch (e) {
-              console.error(e);
-          } finally {
-              setIsLoadingRecurring(false);
-          }
-      };
-      if (transactions.length > 5) fetchRecurring();
-  }, [transactions.length]);
+  // REMOVED: Automatic recurring expense check on load to prevent 429
+  
+  const handleAnalyzeRecurring = async () => {
+      if (transactions.length < 5) {
+          alert("Need more transactions to analyze.");
+          return;
+      }
+      setIsLoadingRecurring(true);
+      try {
+          const res = await predictRecurringExpenses(transactions);
+          setRecurringData(res);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsLoadingRecurring(false);
+      }
+  };
 
   const setQuickRange = (months: number | 'YTD' | 'ALL') => {
     const end = new Date();
@@ -519,29 +522,47 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                               <RemoveButton />
                           </div>
                       </div>
+                      
+                      {/* Manual Trigger / Results Area */}
                       <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                          {recurringData?.breakdown?.map((item: any, idx: number) => (
-                              <div key={idx} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 flex justify-between items-center group hover:border-indigo-500/30 transition-all">
-                                  <div className="flex items-center gap-3">
-                                      <div className={`p-2 rounded-lg ${item.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                          {item.type === 'income' ? <ArrowUpRight size={16}/> : <ArrowDownLeft size={16}/>}
-                                      </div>
-                                      <div>
-                                          <div className="text-sm font-medium text-white">{item.reason}</div>
-                                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">{item.category}</div>
-                                      </div>
+                          {recurringData ? (
+                              recurringData.breakdown.length > 0 ? (
+                                recurringData.breakdown.map((item: any, idx: number) => (
+                                    <div key={idx} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 flex justify-between items-center group hover:border-indigo-500/30 transition-all">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${item.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                                {item.type === 'income' ? <ArrowUpRight size={16}/> : <ArrowDownLeft size={16}/>}
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-medium text-white">{item.reason}</div>
+                                                <div className="text-[10px] text-slate-500 uppercase tracking-wider">{item.category}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className={`text-sm font-bold font-mono ${item.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
+                                                {currency}{item.amount.toLocaleString()}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500">Est. Monthly</div>
+                                        </div>
+                                    </div>
+                                ))
+                              ) : (
+                                  <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs">
+                                      No regular payments found in recent history.
                                   </div>
-                                  <div className="text-right">
-                                      <div className={`text-sm font-bold font-mono ${item.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
-                                          {currency}{item.amount.toLocaleString()}
-                                      </div>
-                                      <div className="text-[10px] text-slate-500">Est. Monthly</div>
-                                  </div>
-                              </div>
-                          ))}
-                          {(!recurringData || recurringData.breakdown.length === 0) && !isLoadingRecurring && (
-                              <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs">
-                                  No regular payments detected yet.
+                              )
+                          ) : (
+                              <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs py-8 gap-3">
+                                  <Zap size={32} className="text-slate-600 mb-2" />
+                                  <p>AI Analysis not started.</p>
+                                  <button 
+                                    onClick={handleAnalyzeRecurring}
+                                    disabled={isLoadingRecurring}
+                                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-2"
+                                  >
+                                      {isLoadingRecurring ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                      Scan for Recurring Bills
+                                  </button>
                               </div>
                           )}
                       </div>
