@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
 import { Transaction, CategorizationRule, Budget, Goal } from "../types";
 
 // Helper to retrieve API Key from environment or local storage
@@ -25,6 +25,33 @@ const getAI = () => {
   }
   return new GoogleGenAI({ apiKey });
 };
+
+// Helper for exponential backoff
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function callGeminiWithRetry<T>(
+  apiCall: () => Promise<T>,
+  retries = 3,
+  initialDelay = 2000
+): Promise<T> {
+  try {
+    return await apiCall();
+  } catch (error: any) {
+    // Check for 429 (Resource Exhausted) or 503 (Service Unavailable)
+    const errorCode = error?.status || error?.error?.code;
+    const errorMessage = error?.message || error?.error?.message || '';
+    
+    const isRateLimit = errorCode === 429 || errorCode === 503 || errorMessage.includes('429') || errorMessage.includes('quota');
+
+    if (retries > 0 && isRateLimit) {
+      console.warn(`Gemini API Rate Limit hit (${errorCode}). Retrying in ${initialDelay}ms... (${retries} attempts left)`);
+      await delay(initialDelay);
+      // Exponential backoff: 2s -> 4s -> 8s
+      return callGeminiWithRetry(apiCall, retries - 1, initialDelay * 2);
+    }
+    throw error;
+  }
+}
 
 const CONSULTANT_TOOLS: FunctionDeclaration[] = [
   {
@@ -124,7 +151,7 @@ export const proposeBudgetsAI = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
@@ -142,7 +169,7 @@ export const proposeBudgetsAI = async (
           }
         }
       }
-    });
+    }));
 
     return JSON.parse(response.text || "[]");
   } catch (error) {
@@ -171,7 +198,7 @@ export const categorizeTransactionsAI = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
@@ -188,7 +215,7 @@ export const categorizeTransactionsAI = async (
           }
         }
       }
-    });
+    }));
 
     const text = response.text;
     if (!text) return [];
@@ -221,7 +248,7 @@ export const generateRulesFromHistory = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
@@ -238,7 +265,7 @@ export const generateRulesFromHistory = async (
             }
         }
       }
-    });
+    }));
 
     const rawRules = JSON.parse(response.text || "[]");
     return rawRules.map((r: any) => ({
@@ -293,13 +320,13 @@ export const predictRecurringExpenses = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json"
       }
-    });
+    }));
 
     const res = JSON.parse(response.text || '{"totalExpenses": 0, "totalIncome": 0, "breakdown": []}');
     return {
@@ -347,13 +374,14 @@ export const analyzeFinancesDeeply = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    // Reduced thinking budget to prevent TPM exhaustion on free tiers
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 32768 },
+        thinkingConfig: { thinkingBudget: 8192 }, 
       }
-    });
+    }));
 
     return { text: response.text || "I couldn't generate an analysis at this time." };
   } catch (error) {
@@ -412,7 +440,7 @@ export const chatWithFinanceAssistant = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [
             ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
@@ -425,7 +453,7 @@ export const chatWithFinanceAssistant = async (
                 { functionDeclarations: CONSULTANT_TOOLS }
             ]
         }
-    });
+    }));
 
     // Parse Response for Text and Function Calls
     let text = "";
@@ -448,8 +476,13 @@ export const chatWithFinanceAssistant = async (
         groundingChunks: chunks,
         functionCalls: functionCalls.length > 0 ? functionCalls : undefined
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Chat error:", error);
+    // User-friendly error for quota issues
+    const isQuota = error?.status === 429 || error?.error?.code === 429;
+    if (isQuota) {
+        return { text: "⚠️ You have exceeded the Gemini API Rate Limit or Quota. Please wait a minute before sending another message, or check your API billing settings." };
+    }
     return { text: "I'm having trouble connecting to the AI service right now. Please check your API Key in Settings." };
   }
 };
@@ -499,13 +532,13 @@ export const generateDynamicChart = async (
     `;
   
     try {
-      const response = await ai.models.generateContent({
+      const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
         }
-      });
+      }));
   
       return JSON.parse(response.text || "{}");
     } catch (error) {
