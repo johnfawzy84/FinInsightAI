@@ -23,7 +23,10 @@ import {
   Key,
   CheckCircle,
   AlertCircle,
-  Globe
+  Globe,
+  LayoutDashboard,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -206,7 +209,32 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </section>
 
-      {/* 2. Google Drive Sync */}
+      {/* 2. Dashboard Widgets */}
+      <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
+        <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center gap-3">
+            <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400"><LayoutDashboard size={24} /></div>
+            <div>
+                <h3 className="text-xl font-bold text-white">Dashboard Widgets</h3>
+                <p className="text-sm text-slate-400">Manage visibility of your charts.</p>
+            </div>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeSession.dashboardWidgets.map(widget => (
+                <div key={widget.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${widget.visible ? 'bg-slate-800 border-slate-600' : 'bg-slate-900 border-slate-800 opacity-60'}`}>
+                    <span className="text-sm font-medium text-slate-200 truncate pr-2">{widget.title}</span>
+                    <button 
+                        onClick={() => onUpdateDashboardWidgets(prev => prev.map(w => w.id === widget.id ? { ...w, visible: !w.visible } : w))}
+                        className={`p-2 rounded-lg transition-colors ${widget.visible ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20' : 'text-slate-500 bg-slate-800 hover:text-slate-300'}`}
+                        title={widget.visible ? "Hide Widget" : "Show Widget"}
+                    >
+                        {widget.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                    </button>
+                </div>
+            ))}
+        </div>
+      </section>
+
+      {/* 3. Google Drive Sync */}
       <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
         <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -287,7 +315,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </section>
 
-      {/* 3. Session Data (Import/Export/Currency) */}
+      {/* 4. Session Data (Import/Export/Currency) */}
       <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
          <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -364,7 +392,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </section>
 
-      {/* 4. Categorization Rules */}
+      {/* 5. Categorization Rules */}
       <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
         <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -480,7 +508,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </section>
 
-      {/* 5. Category Manager */}
+      {/* 6. Category Manager */}
       <section className="bg-surface rounded-xl border border-slate-700 overflow-hidden shadow-lg">
          <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
             <div className="flex items-center gap-3">

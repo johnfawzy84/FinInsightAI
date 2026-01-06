@@ -244,6 +244,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       }
   };
 
+  const handleRemoveWidget = (id: string) => {
+      onUpdateDashboardWidgets(prev => prev.map(w => w.id === id ? { ...w, visible: false } : w));
+  };
+
   const startEditingWidget = (widget: DashboardWidget) => {
     setEditingWidgetId(widget.id);
     setEditWidgetQuery(widget.query || '');
@@ -444,6 +448,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       const ExpandButton = () => (
           <button onClick={() => handleExpandWidget(widget)} className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors ml-2"><Maximize2 size={16} /></button>
       );
+      const RemoveButton = () => (
+          <button onClick={() => handleRemoveWidget(widget.id)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-700/50 rounded transition-colors ml-1" title="Remove Widget"><X size={16} /></button>
+      );
+
       switch(widget.type) {
           case 'net-worth':
               return (
@@ -453,12 +461,13 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <h3 className="text-xl font-bold text-white flex items-center gap-2"><TrendingUp className="text-emerald-400" size={20}/> {widget.title}</h3>
                             <p className="text-xs text-slate-500">Wealth based on cash flow + assets</p>
                         </div>
-                        <div className="flex items-center gap-4">
-                             <div className="text-right">
+                        <div className="flex items-center gap-2">
+                             <div className="text-right mr-2">
                                 <p className="text-2xl font-bold text-white">{currency}{(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
                                 <p className="text-xs text-emerald-400">Current Estimate</p>
                             </div>
                             <ExpandButton />
+                            <RemoveButton />
                         </div>
                     </div>
                     <ResponsiveContainer width="100%" height={250}>
@@ -484,6 +493,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                         <div className="flex gap-2">
                             <button onClick={() => setIsAssetModalOpen(true)} className="p-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-400 rounded-lg transition-all"><Edit2 size={16} /></button>
                             <ExpandButton />
+                            <RemoveButton />
                         </div>
                     </div>
                     <ResponsiveContainer width="100%" height={250}>
@@ -504,7 +514,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                               <h3 className="text-xl font-bold text-white flex items-center gap-2"><RefreshCw className="text-cyan-400" size={20}/> {widget.title}</h3>
                               <p className="text-xs text-slate-500">Auto-detected regular payments</p>
                           </div>
-                          {isLoadingRecurring && <Loader2 size={16} className="animate-spin text-slate-500" />}
+                          <div className="flex items-center gap-2">
+                              {isLoadingRecurring && <Loader2 size={16} className="animate-spin text-slate-500" />}
+                              <RemoveButton />
+                          </div>
                       </div>
                       <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                           {recurringData?.breakdown?.map((item: any, idx: number) => (
@@ -542,7 +555,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
                             <p className="text-xs text-slate-500">Monthly Income vs Expenses</p>
                         </div>
-                        <ExpandButton />
+                        <div className="flex items-center gap-2">
+                            <ExpandButton />
+                            <RemoveButton />
+                        </div>
                      </div>
                      <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={cashFlowData}>
@@ -564,7 +580,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                                 <h3 className="text-xl font-bold text-white flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {widget.title}</h3>
                                 <p className="text-xs text-slate-500">Distribution of expenses</p>
                             </div>
-                            <ExpandButton />
+                            <div className="flex items-center gap-2">
+                                <ExpandButton />
+                                <RemoveButton />
+                            </div>
                         </div>
                         <ResponsiveContainer width="100%" height={250}>
                             <PieChart>
@@ -584,7 +603,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                                 <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
                                 <p className="text-xs text-slate-500">Flow from Income to Expenses</p>
                             </div>
-                            <ExpandButton />
+                            <div className="flex items-center gap-2">
+                                <ExpandButton />
+                                <RemoveButton />
+                            </div>
                         </div>
                         <ResponsiveContainer width="100%" height={350}>
                             <Sankey 
@@ -617,6 +639,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                                         <button onClick={() => startEditingWidget(widget)} className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-slate-700 rounded"><Edit2 size={16}/></button>
                                         <button onClick={() => refreshCustomWidget(widget)} className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors">{refreshingWidgetId === widget.id ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}</button>
                                         <ExpandButton />
+                                        <RemoveButton />
                                     </div>
                                 </>
                             )}
@@ -672,6 +695,11 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
           {activeSession.dashboardWidgets.filter(w => w.visible).map(widget => (
               <div key={widget.id} className={`bg-surface p-6 rounded-xl border border-slate-700 shadow-lg ${widget.width === 'full' ? 'lg:col-span-2' : ''} min-h-[350px]`}>{renderWidget(widget)}</div>
           ))}
+          {activeSession.dashboardWidgets.filter(w => w.visible).length === 0 && (
+              <div className="lg:col-span-2 text-center p-12 text-slate-500 border-2 border-dashed border-slate-700 rounded-xl">
+                  No widgets visible. Manage your dashboard layout in Settings.
+              </div>
+          )}
       </div>
     </div>
   );
