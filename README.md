@@ -36,3 +36,15 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 ```
+
+## CI: Build image on tag
+
+A GitHub Actions workflow is provided at .github/workflows/build-image-on-tag.yml. It can be triggered manually using the `workflow_dispatch` UI in GitHub and requires the `tag` input.
+
+- **Trigger rules**: The workflow only runs when the provided `tag` starts with `v` (for semantic versions) or `release-`.
+- **Registry**: The workflow builds and pushes the image to GitHub Container Registry (`ghcr.io`) under the path `ghcr.io/<owner>/fininsight:<tag>`.
+- **Permissions & auth**: The workflow uses the automatically provided `GITHUB_TOKEN` for authenticating to `ghcr.io` and requests `packages: write` permission in the workflow.
+- **Artifacts**: The built Docker image is exported to `image.tar` and uploaded as a workflow artifact named `docker-image-<tag>`.
+
+To run the workflow from the GitHub UI: go to the Actions tab, choose "Build Docker image on tag", click "Run workflow", enter a tag like `v1.0.0`, and run.
+
