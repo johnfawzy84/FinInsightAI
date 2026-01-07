@@ -5,7 +5,7 @@ on:
     inputs:
       tag:
         description: 'Tag to build (example: v1.2.3 or release-2026-01)'
-        required: true
+        required: false
         type: string
 
 permissions:
@@ -15,10 +15,18 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: startsWith(github.event.inputs.tag, 'v') || startsWith(github.event.inputs.tag, 'release-')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Determine tag
+        id: set_tag
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_SHA::7}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -41,16 +49,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/fininsight:${{ github.event.inputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/fininsight:${{ steps.set_tag.outputs.tag }}
 
-      - name: Export image to tar
-        run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/fininsight:${{ github.event.inputs.tag }}
-          docker image save -o image.tar "$IMAGE"
-
-      - name: Save image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image-${{ github.event.inputs.tag }}
-          path: |
-            ./image.tar
