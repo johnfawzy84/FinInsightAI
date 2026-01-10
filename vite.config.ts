@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
   return {
     plugins: [react()],
-    base: '/finsight/',
+    base: './',
     define: {
       // Polyfill process.env for the existing code structure
       'process.env': env

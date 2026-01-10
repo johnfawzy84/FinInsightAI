@@ -5,10 +5,10 @@ import { Transaction, CategorizationRule, Budget, Goal, TransactionType } from "
 const getApiKey = (): string | null => {
   const localKey = localStorage.getItem('gemini_api_key');
   if (localKey && localKey.length > 0) {
-      return localKey;
+    return localKey.trim();
   }
   if (process.env.API_KEY && process.env.API_KEY.length > 0) {
-    return process.env.API_KEY;
+    return process.env.API_KEY.trim();
   }
   return null;
 };
@@ -34,7 +34,7 @@ async function callGeminiWithRetry<T>(
   } catch (error: any) {
     const errorCode = error?.status || error?.error?.code;
     const errorMessage = error?.message || error?.error?.message || '';
-    
+
     const isRateLimit = errorCode === 429 || errorCode === 503 || errorMessage.includes('429') || errorMessage.includes('quota');
 
     if (retries > 0 && isRateLimit) {
@@ -51,40 +51,40 @@ async function callGeminiWithRetry<T>(
 const prepareEfficientContext = (transactions: Transaction[]) => {
   // Sort descending (newest first)
   const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  
+
   if (sorted.length === 0) return { recentJson: "[]", summary: "No data", meta: { count: 0 } };
 
   // 1. Recent Transactions (Raw details for specific queries)
   // Limit to last 60 items to keep token count manageable (~1.5k tokens)
   const recentRaw = sorted.slice(0, 60).map(t => ({
-      d: t.date,
-      desc: t.description,
-      amt: Math.round(t.amount), // Round to save chars
-      cat: t.category,
-      t: t.type === TransactionType.INCOME ? 'INC' : 'EXP' // Abbreviate
+    d: t.date,
+    desc: t.description,
+    amt: Math.round(t.amount), // Round to save chars
+    cat: t.category,
+    t: t.type === TransactionType.INCOME ? 'INC' : 'EXP' // Abbreviate
   }));
 
   // 2. Monthly Aggregates (For trends context)
   const monthlyStats: Record<string, { inc: number, exp: number }> = {};
-  
+
   sorted.slice(60).forEach(t => {
-      const m = t.date.substring(0, 7); // YYYY-MM
-      if (!monthlyStats[m]) monthlyStats[m] = { inc: 0, exp: 0 };
-      
-      if (t.type === TransactionType.INCOME) monthlyStats[m].inc += t.amount;
-      else monthlyStats[m].exp += t.amount;
+    const m = t.date.substring(0, 7); // YYYY-MM
+    if (!monthlyStats[m]) monthlyStats[m] = { inc: 0, exp: 0 };
+
+    if (t.type === TransactionType.INCOME) monthlyStats[m].inc += t.amount;
+    else monthlyStats[m].exp += t.amount;
   });
 
   const summaryStr = Object.entries(monthlyStats)
-      .sort((a, b) => b[0].localeCompare(a[0])) // Sort months desc
-      .slice(0, 12) // Last 12 months only
-      .map(([m, s]) => `${m}: +${Math.round(s.inc)} / -${Math.round(s.exp)}`)
-      .join('\n');
+    .sort((a, b) => b[0].localeCompare(a[0])) // Sort months desc
+    .slice(0, 12) // Last 12 months only
+    .map(([m, s]) => `${m}: +${Math.round(s.inc)} / -${Math.round(s.exp)}`)
+    .join('\n');
 
   return {
-      recentJson: JSON.stringify(recentRaw),
-      summary: summaryStr,
-      meta: { count: transactions.length, start: sorted[sorted.length-1]?.date, end: sorted[0]?.date }
+    recentJson: JSON.stringify(recentRaw),
+    summary: summaryStr,
+    meta: { count: transactions.length, start: sorted[sorted.length - 1]?.date, end: sorted[0]?.date }
   };
 };
 
@@ -170,11 +170,11 @@ export const proposeBudgetsAI = async (
   const ai = getAI();
   // Limit to recent 200 for proposal to save tokens
   const recentTx = transactions.slice(-200).map(t => ({
-      c: t.category,
-      a: Math.round(t.amount),
-      d: t.date
+    c: t.category,
+    a: Math.round(t.amount),
+    d: t.date
   }));
-  
+
   const prompt = `
     Propose monthly budgets.
     Cats: ${availableCategories.join(', ')}
@@ -283,24 +283,24 @@ export const generateRulesFromHistory = async (
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    keyword: { type: Type.STRING },
-                    category: { type: Type.STRING }
-                },
-                required: ["keyword", "category"]
-            }
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              keyword: { type: Type.STRING },
+              category: { type: Type.STRING }
+            },
+            required: ["keyword", "category"]
+          }
         }
       }
     }));
 
     const rawRules = JSON.parse(response.text || "[]");
     return rawRules.map((r: any) => ({
-        id: `rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        keyword: r.keyword.toLowerCase(),
-        category: r.category
+      id: `rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      keyword: r.keyword.toLowerCase(),
+      category: r.category
     }));
 
   } catch (error) {
@@ -311,17 +311,17 @@ export const generateRulesFromHistory = async (
 
 export const predictRecurringExpenses = async (
   transactions: Transaction[]
-): Promise<{ 
-    total: number; 
-    expectedIncome: number;
-    breakdown: { category: string; amount: number; reason: string; type: 'income' | 'expense' }[] 
+): Promise<{
+  total: number;
+  expectedIncome: number;
+  breakdown: { category: string; amount: number; reason: string; type: 'income' | 'expense' }[]
 }> => {
   if (transactions.length < 5) return { total: 0, expectedIncome: 0, breakdown: [] };
 
   const ai = getAI();
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(new Date().getMonth() - 3);
-  
+
   // Limit input to recent 200 items to avoid token overflow
   const recentTx = transactions
     .filter(t => new Date(t.date) >= threeMonthsAgo)
@@ -345,9 +345,9 @@ export const predictRecurringExpenses = async (
 
     const res = JSON.parse(response.text || '{"totalExpenses": 0, "totalIncome": 0, "breakdown": []}');
     return {
-        total: res.totalExpenses || 0,
-        expectedIncome: res.totalIncome || 0,
-        breakdown: res.breakdown || []
+      total: res.totalExpenses || 0,
+      expectedIncome: res.totalIncome || 0,
+      breakdown: res.breakdown || []
     };
   } catch (error) {
     console.error("Error predicting expenses:", error);
@@ -362,7 +362,7 @@ export const analyzeFinancesDeeply = async (
   if (transactions.length === 0) return { text: "No transaction data available." };
 
   const ai = getAI();
-  
+
   // Use optimized context
   const context = prepareEfficientContext(transactions);
 
@@ -385,7 +385,7 @@ export const analyzeFinancesDeeply = async (
       model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 8192 }, 
+        thinkingConfig: { thinkingBudget: 8192 },
       }
     }));
 
@@ -402,9 +402,9 @@ export const chatWithFinanceAssistant = async (
   transactions: Transaction[],
   contextData: { goals: Goal[], budgets: Budget[], categories: string[] }
 ): Promise<{ text?: string, groundingChunks?: any[], functionCalls?: any[] }> => {
-    
+
   const ai = getAI();
-  
+
   // Use optimized context
   const context = prepareEfficientContext(transactions);
 
@@ -426,18 +426,17 @@ export const chatWithFinanceAssistant = async (
 
   try {
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-            ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
-            { role: 'user', parts: [{ text: currentMessage }] }
-        ],
-        config: { 
-            systemInstruction,
-            tools: [
-                { googleSearch: {} }, 
-                { functionDeclarations: CONSULTANT_TOOLS }
-            ]
-        }
+      model: 'gemini-3-flash-preview',
+      contents: [
+        ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
+        { role: 'user', parts: [{ text: currentMessage }] }
+      ],
+      config: {
+        systemInstruction,
+        tools: [
+          { functionDeclarations: CONSULTANT_TOOLS }
+        ]
+      }
     }));
 
     let text = "";
@@ -445,62 +444,64 @@ export const chatWithFinanceAssistant = async (
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
 
     if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
-        for (const part of response.candidates[0].content.parts) {
-            if (part.text) text += part.text;
-            if (part.functionCall) functionCalls.push(part.functionCall);
-        }
+      for (const part of response.candidates[0].content.parts) {
+        if (part.text) text += part.text;
+        if (part.functionCall) functionCalls.push(part.functionCall);
+      }
     }
 
-    return { 
-        text: text || (functionCalls.length > 0 ? "I've prepared a proposal." : "No response generated."),
-        groundingChunks: chunks,
-        functionCalls: functionCalls.length > 0 ? functionCalls : undefined
+    return {
+      text: text || (functionCalls.length > 0 ? "I've prepared a proposal." : "No response generated."),
+      groundingChunks: chunks,
+      functionCalls: functionCalls.length > 0 ? functionCalls : undefined
     };
   } catch (error: any) {
     console.error("Chat error:", error);
-    const isQuota = error?.status === 429 || error?.error?.code === 429;
-    if (isQuota) {
-        return { text: "⚠️ You have exceeded the Gemini API Rate Limit (429). Please wait a minute." };
+    const errorCode = error?.status || error?.error?.code;
+    const errorMessage = error?.message || error?.error?.message || '';
+
+    if (errorCode === 429 || errorMessage.includes('429') || errorMessage.includes('quota')) {
+      return { text: `⚠️ Gemini API Rate Limit / Quota Exceeded (429).\n\nDetails: ${errorMessage || 'You may have hit the free tier limit (15 req/min) or your key needs a moment.'}` };
     }
-    return { text: "Connection error. Check API Key." };
+    return { text: `Connection error (${errorCode || 'Unknown'}). ${errorMessage.substring(0, 150)}` };
   }
 };
 
 export const generateDynamicChart = async (
-    transactions: Transaction[],
-    userQuery: string
-  ): Promise<any> => {
-    const ai = getAI();
-    
-    // For charts, we need raw data, but maybe not ALL of it if it's huge.
-    // However, charts usually need specific aggregations. 
-    // We'll send up to 500 recent items for better chart accuracy, condensed.
-    const dataStr = JSON.stringify(transactions.slice(-500).map(t => ({
-        d: t.date,
-        a: Math.round(t.amount),
-        c: t.category,
-        t: t.type === TransactionType.INCOME ? 'I' : 'E'
-    })));
-  
-    const prompt = `
+  transactions: Transaction[],
+  userQuery: string
+): Promise<any> => {
+  const ai = getAI();
+
+  // For charts, we need raw data, but maybe not ALL of it if it's huge.
+  // However, charts usually need specific aggregations. 
+  // We'll send up to 500 recent items for better chart accuracy, condensed.
+  const dataStr = JSON.stringify(transactions.slice(-500).map(t => ({
+    d: t.date,
+    a: Math.round(t.amount),
+    c: t.category,
+    t: t.type === TransactionType.INCOME ? 'I' : 'E'
+  })));
+
+  const prompt = `
       Create a JSON chart config for Recharts.
       Query: "${userQuery}"
       Data: ${dataStr}
       Output: { "chartType": "bar"|"line"|"pie"|"area", "title": "...", "xAxisKey": "...", "series": [{ "dataKey": "...", "color": "#..." }], "data": [...] }
     `;
-  
-    try {
-      const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-        }
-      }));
-  
-      return JSON.parse(response.text || "{}");
-    } catch (error) {
-      console.error("Error generating chart:", error);
-      return { chartType: "error", title: "Failed to generate chart." };
-    }
-  };
+
+  try {
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      }
+    }));
+
+    return JSON.parse(response.text || "{}");
+  } catch (error) {
+    console.error("Error generating chart:", error);
+    return { chartType: "error", title: "Failed to generate chart." };
+  }
+};
