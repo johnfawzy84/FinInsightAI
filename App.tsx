@@ -16,11 +16,14 @@ import { categorizeTransactionsAI, generateRulesFromHistory } from './services/g
 import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings, Target, Wallet } from 'lucide-react';
 import { GoalManager } from './components/GoalManager';
 import { BudgetManager } from './components/BudgetManager';
+import { TutorialOverlay, TutorialStep } from './components/TutorialOverlay';
+import { HelpCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings' | 'goals' | 'budgets'>('dashboard');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   
   const { 
     sessions, 
@@ -75,6 +78,69 @@ const App: React.FC = () => {
     unusedCount: number;
     unusedCategories: string[];
   } | null>(null);
+
+  const tutorialSteps: TutorialStep[] = [
+    {
+        targetId: 'tutorial-new-session',
+        title: 'Create a Session',
+        content: 'Start by creating a new session to organize your financial data. You can have multiple sessions for different purposes.',
+        position: 'right'
+    },
+    {
+        targetId: 'tutorial-import',
+        title: 'Import Data',
+        content: 'Import your bank statements or transaction files here. We support various formats like CSV and Excel.',
+        position: 'right'
+    },
+    {
+        targetId: 'tutorial-nav-transactions',
+        title: 'View Transactions',
+        content: 'Navigate to the Transactions tab to manage your imported data.',
+        position: 'right',
+        action: () => setActiveTab('transactions')
+    },
+    {
+        targetId: 'tutorial-add-transaction',
+        title: 'Add Manually',
+        content: 'You can also add transactions manually if you prefer.',
+        position: 'bottom',
+        action: () => setActiveTab('transactions')
+    },
+    {
+        targetId: 'tutorial-auto-categorize',
+        title: 'AI Categorization',
+        content: 'Use our AI to automatically categorize your transactions based on their descriptions.',
+        position: 'bottom',
+        action: () => setActiveTab('transactions')
+    },
+    {
+        targetId: 'tutorial-nav-budgets',
+        title: 'Manage Budgets',
+        content: 'Set up budgets for different categories to keep your spending on track.',
+        position: 'right',
+        action: () => setActiveTab('budgets')
+    },
+    {
+        targetId: 'tutorial-nav-goals',
+        title: 'Set Financial Goals',
+        content: 'Define your financial goals and track your progress towards them.',
+        position: 'right',
+        action: () => setActiveTab('goals')
+    },
+    {
+        targetId: 'tutorial-nav-settings',
+        title: 'Settings & Rules',
+        content: 'Configure your categories, rules, and other settings here.',
+        position: 'right',
+        action: () => setActiveTab('settings')
+    },
+    {
+        targetId: 'tutorial-consult-ai',
+        title: 'Consult AI',
+        content: 'Chat with our AI consultant to get insights, advice, and answers about your finances.',
+        position: 'right'
+    }
+  ];
 
   const derivedTransactionData = useMemo(() => {
     if (!selectedTransactionId) return null;
@@ -503,6 +569,13 @@ const App: React.FC = () => {
                       <span className="px-2 py-1 rounded-md bg-indigo-500/20 text-indigo-300 text-xs border border-indigo-500/30 font-medium">
                         {activeSession.name}
                       </span>
+                      <button 
+                        onClick={() => setIsTutorialOpen(true)}
+                        className="p-1.5 text-indigo-400 bg-indigo-500/10 rounded-full transition-all animate-glow hover:animate-none"
+                        title="Start Tutorial"
+                      >
+                        <HelpCircle size={20} />
+                      </button>
                     </div>
                     <p className="text-slate-400">
                         {activeTab === 'dashboard' && 'Track your wealth and regular spending.'}
@@ -515,6 +588,7 @@ const App: React.FC = () => {
                 
                 {activeTab === 'transactions' && (
                     <button 
+                        id="tutorial-auto-categorize"
                         onClick={handleAutoCategorize}
                         disabled={isCategorizing}
                         className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-all disabled:opacity-50"
@@ -589,6 +663,11 @@ const App: React.FC = () => {
                 />
             )}
         </main>
+        <TutorialOverlay 
+            steps={tutorialSteps} 
+            isOpen={isTutorialOpen} 
+            onClose={() => setIsTutorialOpen(false)} 
+        />
       </div>
     </HashRouter>
   );

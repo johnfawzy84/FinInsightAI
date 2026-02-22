@@ -187,7 +187,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setIsCreatingSession(true)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors">
+                <button 
+                  id="tutorial-new-session"
+                  onClick={() => setIsCreatingSession(true)} 
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors"
+                >
                   <Plus size={12} /> New Session
                 </button>
               )
@@ -207,6 +211,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         ].map((item) => (
           <button 
             key={item.id}
+            id={`tutorial-nav-${item.id}`}
             onClick={() => onSelectTab(item.id as any)}
             className={`w-full flex items-center rounded-xl transition-all ${
               activeTab === item.id 
@@ -223,6 +228,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className={`border-t border-slate-700 my-2 mx-2 ${isCollapsed ? 'w-8' : 'w-full'}`}></div>
 
         <button 
+          id="tutorial-consult-ai"
           onClick={onToggleChat}
           className={`w-full flex items-center rounded-xl transition-all ${
             isChatOpen 
@@ -238,6 +244,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <div className={`p-4 border-t border-slate-700 bg-slate-900/30 ${isCollapsed ? 'flex justify-center' : ''}`}>
         <button 
+            id="tutorial-import"
             onClick={onImportFile}
             className={`flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-slate-800 transition-all group ${isCollapsed ? 'w-10 h-10' : 'w-full h-20'}`}
         >

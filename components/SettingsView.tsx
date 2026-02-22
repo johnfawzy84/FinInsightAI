@@ -78,61 +78,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newRule, setNewRule] = useState<{ keyword: string, category: string, isRegex: boolean }>({ keyword: '', category: '', isRegex: false });
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
-  const [keySource, setKeySource] = useState<'env' | 'local' | 'none'>('none');
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [tempApiKey, setTempApiKey] = useState('');
-
-  // Check for API key on mount
-  useEffect(() => {
-    const checkApiKey = () => {
-        // Check local storage first (Priority)
-        const localKey = localStorage.getItem('gemini_api_key');
-        if (localKey && localKey.length > 0) {
-            setKeySource('local');
-            setHasApiKey(true);
-            return;
-        }
-
-        // Fallback to env
-        if (process.env.API_KEY && process.env.API_KEY.length > 0) {
-            setKeySource('env');
-            setHasApiKey(true);
-            return;
-        }
-
-        setKeySource('none');
-        setHasApiKey(false);
-    };
-    checkApiKey();
-    // Re-check periodically in case it changes
-    const interval = setInterval(checkApiKey, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleOpenApiKeyModal = () => {
-      const stored = localStorage.getItem('gemini_api_key');
-      setTempApiKey(stored || '');
-      setShowApiKeyModal(true);
-  };
-
-  const handleSaveApiKey = () => {
-      if (tempApiKey.trim()) {
-          localStorage.setItem('gemini_api_key', tempApiKey.trim());
-          setKeySource('local');
-      } else {
-          localStorage.removeItem('gemini_api_key');
-          // If removed local, see if env exists
-          if (process.env.API_KEY && process.env.API_KEY.length > 0) {
-              setKeySource('env');
-          } else {
-              setKeySource('none');
-          }
-      }
-      // Trigger instant re-render check
-      setHasApiKey(!!tempApiKey.trim() || (!!process.env.API_KEY && process.env.API_KEY.length > 0));
-      setShowApiKeyModal(false);
-  };
 
   const handleAddOrUpdateRule = () => {
     if (!newRule.keyword.trim() || !newRule.category) return;
@@ -198,39 +143,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   return (
     <div className="space-y-8 animate-fade-in pb-20 relative">
       
-      {/* API Key Modal */}
-      {showApiKeyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                          <Key className="text-indigo-400" /> API Key Configuration
-                      </h3>
-                      <button onClick={() => setShowApiKeyModal(false)} className="text-slate-400 hover:text-white"><X size={24}/></button>
-                  </div>
-                  <p className="text-sm text-slate-400 mb-4">
-                      Enter your Google Gemini API Key below. It will be stored securely in your browser's LocalStorage.
-                  </p>
-                  <input 
-                      type="password" 
-                      value={tempApiKey}
-                      onChange={(e) => setTempApiKey(e.target.value)}
-                      placeholder="AIzaSy..."
-                      className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 font-mono text-sm mb-4"
-                  />
-                  <div className="flex gap-3 justify-end">
-                      <button onClick={() => setShowApiKeyModal(false)} className="px-4 py-2 text-slate-400 hover:text-white">Cancel</button>
-                      <button onClick={handleSaveApiKey} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold">Save Key</button>
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-slate-700">
-                      <p className="text-[10px] text-slate-500">
-                          Get a key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-400 underline">Google AI Studio</a>.
-                      </p>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {/* 1. AI Configuration */}
       <section className="bg-surface rounded-xl border border-indigo-500/30 overflow-hidden shadow-lg shadow-indigo-500/5">
         <div className="p-6 border-b border-indigo-500/20 bg-indigo-500/5 flex items-center justify-between">
@@ -240,7 +152,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <div>
                     <h3 className="text-xl font-bold text-white">AI Reasoning Service</h3>
-                    <p className="text-sm text-slate-400">Configure your Google Gemini credentials.</p>
+                    <p className="text-sm text-slate-400">Powered by Google Gemini.</p>
                 </div>
             </div>
         </div>
@@ -251,35 +163,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="text-xs bg-slate-800 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/20 font-bold uppercase tracking-wider">Google Gemini API</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-300 font-medium">Configuration Status:</span>
-                    {hasApiKey ? (
-                        <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold">
-                            <CheckCircle size={14} /> Active
-                        </span>
-                    ) : (
-                        <span className="text-xs text-amber-400 flex items-center gap-1 font-bold">
-                            <AlertCircle size={14} /> Key Missing
-                        </span>
-                    )}
-                </div>
-                <div className="flex items-center gap-2">
-                     <span className="text-sm text-slate-300 font-medium">Source:</span>
-                     <span className="text-xs text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
-                         {keySource === 'local' ? 'Custom (Browser)' : keySource === 'env' ? 'Environment (System)' : 'None'}
-                     </span>
+                    <span className="text-sm text-slate-300 font-medium">Status:</span>
+                    <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold">
+                        <CheckCircle size={14} /> Active (Managed by Platform)
+                    </span>
                 </div>
                 <p className="text-[11px] text-slate-500 italic max-w-lg mt-1">
-                    The API token is securely managed. {keySource === 'local' ? 'Using your custom key from browser storage.' : 'Using the system default key.'}
+                    The AI service is pre-configured and managed by the platform environment. No manual key setup required.
                 </p>
             </div>
-            
-            <button 
-                onClick={handleOpenApiKeyModal}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 border border-indigo-400/30"
-            >
-                <Key size={18} />
-                {hasApiKey ? 'Update API Key' : 'Set API Key'}
-            </button>
         </div>
       </section>
 
