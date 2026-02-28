@@ -146,6 +146,13 @@ const AppContent: React.FC = () => {
         action: () => setActiveTab('settings')
     },
     {
+        targetId: 'tutorial-session-data',
+        title: 'Export & Import Sessions',
+        content: 'You can export your current session data to a JSON file for backup, or import a previously saved session.',
+        position: 'top',
+        action: () => setActiveTab('settings')
+    },
+    {
         targetId: 'tutorial-consult-ai',
         title: 'Consult AI',
         content: 'Chat with our AI consultant to get insights, advice, and answers about your finances.',

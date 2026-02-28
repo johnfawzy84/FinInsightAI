@@ -325,7 +325,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       </section>
 
       {/* 4. Session Data (Import/Export/Currency) */}
-      <section className="bg-surface rounded-xl border border-border overflow-hidden shadow-lg">
+      <section id="tutorial-session-data" className="bg-surface rounded-xl border border-border overflow-hidden shadow-lg">
          <div className="p-6 border-b border-border bg-surfaceHighlight/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
                 <div className="bg-amber-500/20 p-2 rounded-lg text-amber-400">

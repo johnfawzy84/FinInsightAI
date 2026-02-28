@@ -19,7 +19,8 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
-  LogOut
+  LogOut,
+  Bug
 } from 'lucide-react';
 import { Session, GoogleUser } from '../types';
 import { currentVersion } from '../changelog';
@@ -73,6 +74,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     setNewSessionName('');
     setIsCreatingSession(false);
     onSelectTab('dashboard');
+  };
+
+  const handleReportBug = () => {
+    const repoUrl = "https://github.com/johnfawzy84/FinInsightAI/issues/new";
+    const body = encodeURIComponent(`\n\n\n---\nApp Version: ${currentVersion}\nUser Agent: ${navigator.userAgent}`);
+    window.open(`${repoUrl}?body=${body}`, '_blank');
   };
 
   return (
@@ -245,6 +252,15 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <MessageSquareText size={18} />
           {!isCollapsed && <span className="font-medium text-sm">Consult AI</span>}
+        </button>
+
+        <button 
+          onClick={handleReportBug}
+          className={`w-full flex items-center rounded-xl transition-all text-textMuted hover:bg-surfaceHighlight hover:text-danger ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
+          title={isCollapsed ? 'Report Bug' : ''}
+        >
+          <Bug size={18} />
+          {!isCollapsed && <span className="font-medium text-sm">Report Bug / Request Feature</span>}
         </button>
       </div>
 
