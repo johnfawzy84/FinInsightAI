@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useTheme } from './ThemeContext';
 import { 
   AreaChart, Area, 
   BarChart, Bar, 
@@ -24,11 +25,12 @@ interface DashboardProps {
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const CustomTooltip = ({ active, payload, label, currency }: any) => {
+const CustomTooltip = ({ active, payload, label, currency, theme }: any) => {
   if (active && payload && payload.length) {
+    const isDark = theme === 'dark';
     return (
-      <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl z-50">
-        <p className="text-slate-200 text-sm font-medium mb-1">{label || payload[0].name}</p>
+      <div className={`${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border p-3 rounded-lg shadow-xl z-50`}>
+        <p className={`${isDark ? 'text-slate-200' : 'text-slate-800'} text-sm font-medium mb-1`}>{label || payload[0].name}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-xs" style={{ color: entry.color || entry.fill }}>
             {entry.name}: <span className="font-bold font-mono">{currency}{(typeof entry.value === 'number') ? entry.value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) : entry.value}</span>
@@ -41,20 +43,31 @@ const CustomTooltip = ({ active, payload, label, currency }: any) => {
 };
 
 const GenericChartRenderer = ({ config, currency }: { config: any, currency: string }) => {
+    const { theme } = useTheme();
+    const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    
+    const gridColor = isDark ? '#334155' : '#e2e8f0';
+    const axisColor = isDark ? '#94a3b8' : '#64748b';
+    const tooltipBg = isDark ? '#1e293b' : '#ffffff';
+    const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
+    const tooltipText = isDark ? '#f1f5f9' : '#0f172a';
+
     if (!config || config.chartType === 'error') {
-        return <div className="flex items-center justify-center h-full text-red-400 text-sm">{config?.title || "Error loading chart"}</div>
+        return <div className="flex items-center justify-center h-full text-danger text-sm">{config?.title || "Error loading chart"}</div>
     }
 
     const { chartType, data, xAxisKey, series } = config;
+
+    const CustomTooltipContent = (props: any) => <CustomTooltip {...props} currency={currency} theme={isDark ? 'dark' : 'light'} />;
 
     switch (chartType) {
         case 'bar':
             return (
                 <BarChart data={data}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
-                    <YAxis stroke="#64748b" fontSize={10} />
-                    <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke={axisColor} fontSize={10} />
+                    <YAxis stroke={axisColor} fontSize={10} />
+                    <RechartsTooltip content={CustomTooltipContent} />
                     <Legend />
                     {series.map((s: any) => (
                         <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} />
@@ -64,10 +77,10 @@ const GenericChartRenderer = ({ config, currency }: { config: any, currency: str
         case 'line':
             return (
                 <LineChart data={data}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
-                    <YAxis stroke="#64748b" fontSize={10} />
-                    <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke={axisColor} fontSize={10} />
+                    <YAxis stroke={axisColor} fontSize={10} />
+                    <RechartsTooltip content={CustomTooltipContent} />
                     <Legend />
                     {series.map((s: any) => (
                         <Line key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} strokeWidth={2} />
@@ -85,10 +98,10 @@ const GenericChartRenderer = ({ config, currency }: { config: any, currency: str
                             </linearGradient>
                         ))}
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey={xAxisKey} stroke="#64748b" fontSize={10} />
-                    <YAxis stroke="#64748b" fontSize={10} />
-                    <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke={axisColor} fontSize={10} />
+                    <YAxis stroke={axisColor} fontSize={10} />
+                    <RechartsTooltip content={CustomTooltipContent} />
                     <Legend />
                     {series.map((s: any, i: number) => (
                         <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} fill={`url(#color${i})`} />
@@ -109,10 +122,10 @@ const GenericChartRenderer = ({ config, currency }: { config: any, currency: str
                         paddingAngle={5}
                      >
                         {data.map((entry: any, index: number) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.1)" />
                         ))}
                      </Pie>
-                     <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                     <RechartsTooltip content={CustomTooltipContent} />
                      <Legend />
                  </PieChart>
              );
@@ -122,6 +135,8 @@ const GenericChartRenderer = ({ config, currency }: { config: any, currency: str
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets, activeSession, onUpdateDashboardWidgets, currency }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 6);
@@ -449,10 +464,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
 
   const renderWidget = (widget: DashboardWidget) => {
       const ExpandButton = () => (
-          <button onClick={() => handleExpandWidget(widget)} className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors ml-2"><Maximize2 size={16} /></button>
+          <button onClick={() => handleExpandWidget(widget)} className="p-1.5 text-textMuted hover:text-textMain hover:bg-surfaceHighlight rounded transition-colors ml-2"><Maximize2 size={16} /></button>
       );
       const RemoveButton = () => (
-          <button onClick={() => handleRemoveWidget(widget.id)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-700/50 rounded transition-colors ml-1" title="Remove Widget"><X size={16} /></button>
+          <button onClick={() => handleRemoveWidget(widget.id)} className="p-1.5 text-textMuted hover:text-danger hover:bg-surfaceHighlight/50 rounded transition-colors ml-1" title="Remove Widget"><X size={16} /></button>
       );
 
       switch(widget.type) {
@@ -461,13 +476,13 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                 <div className="flex flex-col h-full">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><TrendingUp className="text-emerald-400" size={20}/> {widget.title}</h3>
-                            <p className="text-xs text-slate-500">Wealth based on cash flow + assets</p>
+                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><TrendingUp className="text-secondary" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-textMuted">Wealth based on cash flow + assets</p>
                         </div>
                         <div className="flex items-center gap-2">
                              <div className="text-right mr-2">
-                                <p className="text-2xl font-bold text-white">{currency}{(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
-                                <p className="text-xs text-emerald-400">Current Estimate</p>
+                                <p className="text-2xl font-bold text-textMain">{currency}{(netWorthData[netWorthData.length - 1]?.value || 0).toLocaleString()}</p>
+                                <p className="text-xs text-secondary">Current Estimate</p>
                             </div>
                             <ExpandButton />
                             <RemoveButton />
@@ -476,10 +491,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                     <ResponsiveContainer width="100%" height={250}>
                         <AreaChart data={netWorthData}>
                             <defs><linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient></defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                            <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(val) => { const d = new Date(val); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; }} minTickGap={40} />
-                            <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `${currency}${val/1000}k`} />
-                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
+                            <XAxis dataKey="date" stroke={isDark ? '#94a3b8' : '#64748b'} fontSize={10} tickFormatter={(val) => { const d = new Date(val); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; }} minTickGap={40} />
+                            <YAxis stroke={isDark ? '#94a3b8' : '#64748b'} fontSize={10} tickFormatter={(val) => `${currency}${val/1000}k`} />
+                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} theme={theme} />} />
                             <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -490,11 +505,11 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                   <div className="flex flex-col h-full">
                     <div className="mb-4 flex justify-between items-start">
                         <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><PieIcon className="text-purple-400" size={20}/> {widget.title}</h3>
-                            <p className="text-xs text-slate-500">Portfolio Distribution</p>
+                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><PieIcon className="text-purple-400" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-textMuted">Portfolio Distribution</p>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => setIsAssetModalOpen(true)} className="p-2 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-400 rounded-lg transition-all"><Edit2 size={16} /></button>
+                            <button onClick={() => setIsAssetModalOpen(true)} className="p-2 bg-surfaceHighlight hover:bg-primary hover:text-textMain text-textMuted rounded-lg transition-all"><Edit2 size={16} /></button>
                             <ExpandButton />
                             <RemoveButton />
                         </div>
@@ -504,7 +519,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                             <Pie data={assets} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value">
                                 {assets.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />)}
                             </Pie>
-                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} theme={theme} />} />
                         </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -514,11 +529,11 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                   <div className="flex flex-col h-full">
                       <div className="mb-4 flex justify-between items-start">
                           <div>
-                              <h3 className="text-xl font-bold text-white flex items-center gap-2"><RefreshCw className="text-cyan-400" size={20}/> {widget.title}</h3>
-                              <p className="text-xs text-slate-500">Auto-detected regular payments</p>
+                              <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><RefreshCw className="text-cyan-400" size={20}/> {widget.title}</h3>
+                              <p className="text-xs text-textMuted">Auto-detected regular payments</p>
                           </div>
                           <div className="flex items-center gap-2">
-                              {isLoadingRecurring && <Loader2 size={16} className="animate-spin text-slate-500" />}
+                              {isLoadingRecurring && <Loader2 size={16} className="animate-spin text-textMuted" />}
                               <RemoveButton />
                           </div>
                       </div>
@@ -528,37 +543,37 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                           {recurringData ? (
                               recurringData.breakdown.length > 0 ? (
                                 recurringData.breakdown.map((item: any, idx: number) => (
-                                    <div key={idx} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 flex justify-between items-center group hover:border-indigo-500/30 transition-all">
+                                    <div key={idx} className="bg-surfaceHighlight/50 p-3 rounded-lg border border-border flex justify-between items-center group hover:border-primary/30 transition-all">
                                         <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg ${item.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                            <div className={`p-2 rounded-lg ${item.type === 'income' ? 'bg-secondary/10 text-secondary' : 'bg-danger/10 text-danger'}`}>
                                                 {item.type === 'income' ? <ArrowUpRight size={16}/> : <ArrowDownLeft size={16}/>}
                                             </div>
                                             <div>
-                                                <div className="text-sm font-medium text-white">{item.reason}</div>
-                                                <div className="text-[10px] text-slate-500 uppercase tracking-wider">{item.category}</div>
+                                                <div className="text-sm font-medium text-textMain">{item.reason}</div>
+                                                <div className="text-[10px] text-textMuted uppercase tracking-wider">{item.category}</div>
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className={`text-sm font-bold font-mono ${item.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
+                                            <div className={`text-sm font-bold font-mono ${item.type === 'income' ? 'text-secondary' : 'text-textMain'}`}>
                                                 {currency}{item.amount.toLocaleString()}
                                             </div>
-                                            <div className="text-[10px] text-slate-500">Est. Monthly</div>
+                                            <div className="text-[10px] text-textMuted">Est. Monthly</div>
                                         </div>
                                     </div>
                                 ))
                               ) : (
-                                  <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs">
+                                  <div className="flex flex-col items-center justify-center h-full text-textMuted text-xs">
                                       No regular payments found in recent history.
                                   </div>
                               )
                           ) : (
-                              <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs py-8 gap-3">
-                                  <Zap size={32} className="text-slate-600 mb-2" />
+                              <div className="flex flex-col items-center justify-center h-full text-textMuted text-xs py-8 gap-3">
+                                  <Zap size={32} className="text-textMuted mb-2" />
                                   <p>AI Analysis not started.</p>
                                   <button 
                                     onClick={handleAnalyzeRecurring}
                                     disabled={isLoadingRecurring}
-                                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-2"
+                                    className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-2"
                                   >
                                       {isLoadingRecurring ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                                       Scan for Recurring Bills
@@ -573,8 +588,8 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                   <div className="flex flex-col h-full">
                      <div className="mb-6 flex justify-between items-end">
                         <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
-                            <p className="text-xs text-slate-500">Monthly Income vs Expenses</p>
+                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Activity className="text-primary" size={20}/> {widget.title}</h3>
+                            <p className="text-xs text-textMuted">Monthly Income vs Expenses</p>
                         </div>
                         <div className="flex items-center gap-2">
                             <ExpandButton />
@@ -583,10 +598,10 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                      </div>
                      <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={cashFlowData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                            <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
-                            <YAxis stroke="#64748b" fontSize={10} />
-                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
+                            <XAxis dataKey="name" stroke={isDark ? '#94a3b8' : '#64748b'} fontSize={10} />
+                            <YAxis stroke={isDark ? '#94a3b8' : '#64748b'} fontSize={10} />
+                            <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} theme={theme} />} />
                             <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
                             <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
                         </BarChart>
@@ -598,8 +613,8 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                    <div className="flex flex-col h-full">
                         <div className="mb-4 flex justify-between items-start">
                             <div>
-                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {widget.title}</h3>
-                                <p className="text-xs text-slate-500">Distribution of expenses</p>
+                                <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {widget.title}</h3>
+                                <p className="text-xs text-textMuted">Distribution of expenses</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <ExpandButton />
@@ -611,7 +626,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                                 <Pie data={spendingData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value">
                                     {spendingData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                 </Pie>
-                                <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                                <RechartsTooltip content={(props: any) => <CustomTooltip {...props} currency={currency} theme={theme} />} />
                             </PieChart>
                         </ResponsiveContainer>
                    </div>
@@ -646,19 +661,19 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                          <div className="mb-4 flex justify-between items-center gap-2 min-h-[40px]">
                             {editingWidgetId === widget.id ? (
                                 <div className="flex-1 flex gap-1">
-                                    <input autoFocus value={editWidgetQuery} onChange={(e) => setEditWidgetQuery(e.target.value)} className="w-full bg-slate-900 border border-indigo-500 rounded px-2 py-1 text-sm text-white focus:outline-none" onKeyDown={(e) => e.key === 'Enter' && saveEditingWidget(widget.id)} />
-                                    <button onClick={() => saveEditingWidget(widget.id)} className="p-1.5 text-emerald-400 hover:bg-slate-700 rounded"><Check size={16}/></button>
-                                    <button onClick={cancelEditingWidget} className="p-1.5 text-slate-400 hover:bg-slate-700 rounded"><X size={16}/></button>
+                                    <input autoFocus value={editWidgetQuery} onChange={(e) => setEditWidgetQuery(e.target.value)} className="w-full bg-background border border-primary rounded px-2 py-1 text-sm text-textMain focus:outline-none" onKeyDown={(e) => e.key === 'Enter' && saveEditingWidget(widget.id)} />
+                                    <button onClick={() => saveEditingWidget(widget.id)} className="p-1.5 text-secondary hover:bg-surfaceHighlight rounded"><Check size={16}/></button>
+                                    <button onClick={cancelEditingWidget} className="p-1.5 text-textMuted hover:bg-surfaceHighlight rounded"><X size={16}/></button>
                                 </div>
                             ) : (
                                 <>
                                     <div className="flex-1 overflow-hidden">
-                                        <h3 className="text-xl font-bold text-white flex items-center gap-2"><Sparkles className="text-indigo-400" size={20}/> {widget.title}</h3>
-                                        <p className="text-xs text-slate-500 truncate">{widget.description}</p>
+                                        <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Sparkles className="text-primary" size={20}/> {widget.title}</h3>
+                                        <p className="text-xs text-textMuted truncate">{widget.description}</p>
                                     </div>
                                     <div className="flex gap-1">
-                                        <button onClick={() => startEditingWidget(widget)} className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-slate-700 rounded"><Edit2 size={16}/></button>
-                                        <button onClick={() => refreshCustomWidget(widget)} className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition-colors">{refreshingWidgetId === widget.id ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}</button>
+                                        <button onClick={() => startEditingWidget(widget)} className="p-1.5 text-textMuted hover:text-primary hover:bg-surfaceHighlight rounded"><Edit2 size={16}/></button>
+                                        <button onClick={() => refreshCustomWidget(widget)} className="p-1.5 text-textMuted hover:text-textMain hover:bg-surfaceHighlight rounded transition-colors">{refreshingWidgetId === widget.id ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}</button>
                                         <ExpandButton />
                                         <RemoveButton />
                                     </div>
@@ -680,44 +695,44 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       {isAssetModalOpen && <AssetManagerModal assets={assets} onUpdateAssets={onUpdateAssets} onClose={() => setIsAssetModalOpen(false)} currency={currency} />}
       <ExpandedChartModal config={expandedChartConfig} onClose={() => setExpandedChartConfig(null)} currency={currency} />
 
-      <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-6 rounded-xl border border-indigo-500/30 shadow-lg group relative">
+      <div className="bg-gradient-to-br from-primary/10 to-secondary/10 p-6 rounded-xl border border-primary/30 shadow-lg group relative">
          <div className="flex items-center gap-2 mb-4">
-             <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-300"><Sparkles size={20} /></div>
-             <div><h3 className="text-xl font-bold text-white">AI Insights Designer</h3><p className="text-xs text-indigo-200">Describe what you want to visualize (e.g. "Monthly food spending")</p></div>
+             <div className="bg-primary/20 p-2 rounded-lg text-primary"><Sparkles size={20} /></div>
+             <div><h3 className="text-xl font-bold text-textMain">AI Insights Designer</h3><p className="text-xs text-primary/80">Describe what you want to visualize (e.g. "Monthly food spending")</p></div>
          </div>
          <div className="flex gap-2 mb-4">
-             <input type="text" value={customQuery} onChange={(e) => setCustomQuery(e.target.value)} placeholder="Ask for a specific graph..." className="flex-1 bg-slate-900/80 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-indigo-500 outline-none" onKeyDown={(e) => e.key === 'Enter' && handleGenerateCustomChart()} />
-             <button onClick={handleGenerateCustomChart} disabled={isGeneratingChart || !customQuery.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 rounded-lg font-medium flex items-center gap-2">{isGeneratingChart ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} Generate</button>
+             <input type="text" value={customQuery} onChange={(e) => setCustomQuery(e.target.value)} placeholder="Ask for a specific graph..." className="flex-1 bg-background/80 border border-border rounded-lg px-4 py-3 text-textMain focus:border-primary outline-none" onKeyDown={(e) => e.key === 'Enter' && handleGenerateCustomChart()} />
+             <button onClick={handleGenerateCustomChart} disabled={isGeneratingChart || !customQuery.trim()} className="bg-primary hover:bg-primary/90 text-white px-6 rounded-lg font-medium flex items-center gap-2">{isGeneratingChart ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} Generate</button>
          </div>
          {customChartConfig && (
-             <div className="bg-slate-900/50 rounded-xl p-4 border border-indigo-500/20 animate-fade-in min-h-[300px]">
+             <div className="bg-background/50 rounded-xl p-4 border border-primary/20 animate-fade-in min-h-[300px]">
                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-semibold text-white">{customChartConfig.title}</h4>
-                    <button onClick={handleSavePlaygroundChart} className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded transition-colors shadow"><Save size={14}/> Save to Dashboard</button>
+                    <h4 className="font-semibold text-textMain">{customChartConfig.title}</h4>
+                    <button onClick={handleSavePlaygroundChart} className="flex items-center gap-1 text-xs bg-secondary hover:bg-secondary/90 text-white px-3 py-1.5 rounded transition-colors shadow"><Save size={14}/> Save to Dashboard</button>
                  </div>
                  <ResponsiveContainer width="100%" height={250}><GenericChartRenderer config={customChartConfig} currency={currency} /></ResponsiveContainer>
              </div>
          )}
       </div>
 
-      <div className="bg-surface p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-2 text-slate-300 font-semibold"><Calendar size={20} className="text-indigo-400" /><span>Analysis Period</span></div>
+      <div className="bg-surface p-4 rounded-xl border border-border flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-2 text-textMain font-semibold"><Calendar size={20} className="text-primary" /><span>Analysis Period</span></div>
         <div className="flex items-center gap-2">
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs text-white" />
-            <span className="text-slate-500">-</span>
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs text-white" />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-background border border-border rounded px-3 py-1.5 text-xs text-textMain" />
+            <span className="text-textMuted">-</span>
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-background border border-border rounded px-3 py-1.5 text-xs text-textMain" />
         </div>
-        <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
-          {['1M', '3M', '6M', 'YTD', 'ALL'].map(opt => <button key={opt} onClick={() => setQuickRange(opt as any)} className="px-3 py-1 text-xs font-medium rounded-md transition-all text-slate-400 hover:text-white hover:bg-slate-700">{opt}</button>)}
+        <div className="flex bg-background rounded-lg p-1 border border-border">
+          {['1M', '3M', '6M', 'YTD', 'ALL'].map(opt => <button key={opt} onClick={() => setQuickRange(opt as any)} className="px-3 py-1 text-xs font-medium rounded-md transition-all text-textMuted hover:text-textMain hover:bg-surfaceHighlight">{opt}</button>)}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {activeSession.dashboardWidgets.filter(w => w.visible).map(widget => (
-              <div key={widget.id} className={`bg-surface p-6 rounded-xl border border-slate-700 shadow-lg ${widget.width === 'full' ? 'lg:col-span-2' : ''} min-h-[350px]`}>{renderWidget(widget)}</div>
+              <div key={widget.id} className={`bg-surface p-6 rounded-xl border border-border shadow-lg ${widget.width === 'full' ? 'lg:col-span-2' : ''} min-h-[350px]`}>{renderWidget(widget)}</div>
           ))}
           {activeSession.dashboardWidgets.filter(w => w.visible).length === 0 && (
-              <div className="lg:col-span-2 text-center p-12 text-slate-500 border-2 border-dashed border-slate-700 rounded-xl">
+              <div className="lg:col-span-2 text-center p-12 text-textMuted border-2 border-dashed border-border rounded-xl">
                   No widgets visible. Manage your dashboard layout in Settings.
               </div>
           )}

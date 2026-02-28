@@ -10,14 +10,19 @@
     <script src="https://apis.google.com/js/api.js" async defer></script>
     <script>
       tailwind.config = {
+        darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              background: '#0f172a', // slate-900
-              surface: '#1e293b', // slate-800
-              primary: '#6366f1', // indigo-500
-              secondary: '#10b981', // emerald-500
-              danger: '#ef4444', // red-500
+              background: 'rgb(var(--color-background) / <alpha-value>)',
+              surface: 'rgb(var(--color-surface) / <alpha-value>)',
+              surfaceHighlight: 'rgb(var(--color-surfaceHighlight) / <alpha-value>)',
+              textMain: 'rgb(var(--color-textMain) / <alpha-value>)',
+              textMuted: 'rgb(var(--color-textMuted) / <alpha-value>)',
+              primary: 'rgb(var(--color-primary) / <alpha-value>)',
+              secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
+              danger: 'rgb(var(--color-danger) / <alpha-value>)',
+              border: 'rgb(var(--color-border) / <alpha-value>)',
             },
             animation: {
               'fade-in': 'fadeIn 0.3s ease-out forwards',
@@ -52,25 +57,52 @@
         }
       }
     </script>
-    <style>
-      body {
-        background-color: #0f172a;
-        color: #f8fafc;
+    <style type="text/tailwindcss">
+      @layer base {
+        :root {
+          --color-background: 248 250 252; /* slate-50 */
+          --color-surface: 255 255 255; /* white */
+          --color-surfaceHighlight: 241 245 249; /* slate-100 */
+          --color-textMain: 15 23 42; /* slate-900 */
+          --color-textMuted: 100 116 139; /* slate-500 */
+          --color-primary: 99 102 241; /* indigo-500 */
+          --color-secondary: 16 185 129; /* emerald-500 */
+          --color-danger: 239 68 68; /* red-500 */
+          --color-border: 226 232 240; /* slate-200 */
+        }
+
+        .dark {
+          --color-background: 15 23 42; /* slate-900 */
+          --color-surface: 30 41 59; /* slate-800 */
+          --color-surfaceHighlight: 51 65 85; /* slate-700 */
+          --color-textMain: 248 250 252; /* slate-50 */
+          --color-textMuted: 148 163 184; /* slate-400 */
+          --color-primary: 99 102 241; /* indigo-500 */
+          --color-secondary: 16 185 129; /* emerald-500 */
+          --color-danger: 239 68 68; /* red-500 */
+          --color-border: 51 65 85; /* slate-700 */
+        }
+        
+        body {
+          @apply bg-background text-textMain;
+        }
       }
+    </style>
+    <style>
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #1e293b; 
+        background: rgb(var(--color-background)); 
       }
       ::-webkit-scrollbar-thumb {
-        background: #475569; 
+        background: rgb(var(--color-border)); 
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; 
+        background: rgb(var(--color-textMuted)); 
       }
       .custom-scrollbar::-webkit-scrollbar {
         width: 4px;

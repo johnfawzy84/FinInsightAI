@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTheme } from './ThemeContext';
 import { 
   AreaChart, Area, 
   BarChart, Bar, 
@@ -17,15 +18,16 @@ interface ExpandedChartModalProps {
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const CustomTooltip = ({ active, payload, label, currency }: any) => {
+const CustomTooltip = ({ active, payload, label, currency, theme }: any) => {
   if (active && payload && payload.length) {
+    const isDark = theme === 'dark';
     return (
-      <div className="bg-slate-900 border border-slate-700 p-4 rounded-lg shadow-2xl z-50">
-        <p className="text-slate-200 text-base font-bold mb-2">{label || payload[0].name}</p>
+      <div className={`${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border p-4 rounded-lg shadow-2xl z-50`}>
+        <p className={`${isDark ? 'text-slate-200' : 'text-slate-800'} text-base font-bold mb-2`}>{label || payload[0].name}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm flex items-center gap-2" style={{ color: entry.color || entry.fill }}>
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }}></span>
-            {entry.name}: <span className="font-mono font-bold text-white">{currency}{(typeof entry.value === 'number') ? entry.value.toLocaleString() : entry.value}</span>
+            {entry.name}: <span className={`font-mono font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{currency}{(typeof entry.value === 'number') ? entry.value.toLocaleString() : entry.value}</span>
           </p>
         ))}
       </div>
@@ -35,38 +37,51 @@ const CustomTooltip = ({ active, payload, label, currency }: any) => {
 };
 
 export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, onClose, currency }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  
+  const gridColor = isDark ? '#334155' : '#e2e8f0';
+  const axisColor = isDark ? '#94a3b8' : '#64748b';
+  const tooltipBg = isDark ? '#1e293b' : '#ffffff';
+  const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
+  const tooltipText = isDark ? '#f1f5f9' : '#0f172a';
+  const brushFill = isDark ? '#1e293b' : '#f1f5f9';
+  const brushStroke = isDark ? '#6366f1' : '#4f46e5';
+
   if (!config) return null;
 
   const { chartType, data, xAxisKey, series, title, description } = config;
+
+  const CustomTooltipContent = (props: any) => <CustomTooltip {...props} currency={currency} theme={isDark ? 'dark' : 'light'} />;
 
   const renderChart = () => {
     switch (chartType) {
         case 'bar':
             return (
                 <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey={xAxisKey} stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} tickFormatter={(val) => `${currency}${val}`} />
-                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} cursor={{ fill: '#1e293b' }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} />
+                    <YAxis stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} tickFormatter={(val) => `${currency}${val}`} />
+                    <Tooltip content={CustomTooltipContent} cursor={{ fill: brushFill }} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     {series.map((s: any) => (
                         <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={60} />
                     ))}
-                    <Brush dataKey={xAxisKey} height={30} stroke="#6366f1" fill="#1e293b" tickFormatter={() => ''} />
+                    <Brush dataKey={xAxisKey} height={30} stroke={brushStroke} fill={brushFill} tickFormatter={() => ''} />
                 </BarChart>
             );
         case 'line':
             return (
                 <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey={xAxisKey} stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} />
+                    <YAxis stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} />
+                    <Tooltip content={CustomTooltipContent} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     {series.map((s: any) => (
                         <Line key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 8 }} />
                     ))}
-                    <Brush dataKey={xAxisKey} height={30} stroke="#6366f1" fill="#1e293b" tickFormatter={() => ''} />
+                    <Brush dataKey={xAxisKey} height={30} stroke={brushStroke} fill={brushFill} tickFormatter={() => ''} />
                 </LineChart>
             );
          case 'area':
@@ -80,15 +95,15 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
                             </linearGradient>
                         ))}
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey={xAxisKey} stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <YAxis stroke="#94a3b8" fontSize={12} tick={{ fill: '#94a3b8' }} />
-                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                    <XAxis dataKey={xAxisKey} stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} />
+                    <YAxis stroke={axisColor} fontSize={12} tick={{ fill: axisColor }} />
+                    <Tooltip content={CustomTooltipContent} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     {series.map((s: any, i: number) => (
                         <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name} stroke={s.color} strokeWidth={3} fill={`url(#expandedColor${i})`} />
                     ))}
-                    <Brush dataKey={xAxisKey} height={30} stroke="#6366f1" fill="#1e293b" tickFormatter={() => ''} />
+                    <Brush dataKey={xAxisKey} height={30} stroke={brushStroke} fill={brushFill} tickFormatter={() => ''} />
                 </AreaChart>
             );
          case 'pie':
@@ -107,10 +122,10 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
                         labelLine={true}
                      >
                         {data.map((entry: any, index: number) => (
-                            <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
+                            <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.1)" />
                         ))}
                      </Pie>
-                     <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                     <Tooltip content={CustomTooltipContent} />
                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
                  </PieChart>
              );
@@ -118,37 +133,37 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
             return (
                 <Sankey
                     data={data}
-                    node={{ stroke: '#1e293b', strokeWidth: 0 }}
-                    link={{ stroke: '#64748b', fillOpacity: 0.3 }}
+                    node={{ stroke: isDark ? '#1e293b' : '#ffffff', strokeWidth: 0 }}
+                    link={{ stroke: isDark ? '#64748b' : '#94a3b8', fillOpacity: 0.3 }}
                     nodePadding={50}
                     margin={{ left: 20, right: 20, top: 20, bottom: 20 }}
                 >
-                    <Tooltip content={(props: any) => <CustomTooltip {...props} currency={currency} />} />
+                    <Tooltip content={CustomTooltipContent} />
                 </Sankey>
             );
         default:
-            return <div className="text-center text-slate-500">Chart type not supported for expanded view.</div>;
+            return <div className="text-center text-textMuted">Chart type not supported for expanded view.</div>;
     }
   };
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex flex-col animate-fade-in overflow-hidden">
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-slate-700 bg-slate-900/90">
+        <div className="flex justify-between items-center p-6 border-b border-border bg-surface/90">
             <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-textMain flex items-center gap-3">
                     {title}
                     {['bar', 'line', 'area'].includes(chartType) && (
-                        <span className="text-xs font-normal bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-full border border-indigo-500/30 flex items-center gap-1">
+                        <span className="text-xs font-normal bg-primary/20 text-primary px-2 py-1 rounded-full border border-primary/30 flex items-center gap-1">
                             <ZoomIn size={12} /> Zoom Enabled
                         </span>
                     )}
                 </h2>
-                {description && <p className="text-slate-400 mt-1">{description}</p>}
+                {description && <p className="text-textMuted mt-1">{description}</p>}
             </div>
             <button 
                 onClick={onClose}
-                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-all border border-slate-700"
+                className="p-2 bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-textMuted hover:text-textMain rounded-xl transition-all border border-border"
             >
                 <X size={28} />
             </button>
@@ -162,7 +177,7 @@ export const ExpandedChartModal: React.FC<ExpandedChartModalProps> = ({ config, 
                 </ResponsiveContainer>
              </div>
              {['bar', 'line', 'area'].includes(chartType) && (
-                <p className="text-slate-500 text-sm mt-4">
+                <p className="text-textMuted text-sm mt-4">
                     Use the slider below the graph to zoom and pan across the data range.
                 </p>
              )}

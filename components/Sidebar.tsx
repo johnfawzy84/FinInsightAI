@@ -22,6 +22,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { Session, GoogleUser } from '../types';
+import { currentVersion } from '../changelog';
 
 interface SidebarProps {
   sessions: Session[];
@@ -40,6 +41,7 @@ interface SidebarProps {
   googleUser: GoogleUser | null;
   isSyncing: boolean;
   onCloudSync: () => void;
+  onOpenChangelog: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -58,7 +60,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   googleUser,
   isSyncing,
-  onCloudSync
+  onCloudSync,
+  onOpenChangelog
 }) => {
   const [isSessionsExpanded, setIsSessionsExpanded] = useState(true);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -73,23 +76,26 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <nav className={`fixed top-0 left-0 h-full bg-surface border-r border-slate-700 hidden md:flex flex-col z-20 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}>
+    <nav className={`fixed top-0 left-0 h-full bg-surface border-r border-border hidden md:flex flex-col z-20 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}>
       {/* Logo Section */}
-      <div className={`p-6 border-b border-slate-700 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+      <div className={`p-6 border-b border-border flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
         {!isCollapsed && (
-          <div className="flex items-center space-x-2 text-indigo-400">
-            <ShieldCheck size={28} />
-            <span className="text-xl font-bold text-white tracking-tight">FinSight AI</span>
+          <div className="flex flex-col">
+            <div className="flex items-center space-x-2 text-primary">
+              <ShieldCheck size={28} />
+              <span className="text-xl font-bold text-textMain tracking-tight">FinSight AI</span>
+            </div>
+            <button onClick={onOpenChangelog} className="text-[10px] text-textMuted font-mono ml-9 hover:text-primary hover:underline text-left">v{currentVersion}</button>
           </div>
         )}
         {isCollapsed && (
-          <div className="text-indigo-400">
+          <div className="text-primary">
              <ShieldCheck size={28} />
           </div>
         )}
         <button 
           onClick={onToggleCollapse} 
-          className={`p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors ${!isCollapsed ? '' : 'absolute -right-3 top-20 bg-slate-800 border border-slate-700 rounded-full shadow-lg z-30'}`}
+          className={`p-1.5 rounded-lg text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors ${!isCollapsed ? '' : 'absolute -right-3 top-20 bg-surfaceHighlight border border-border rounded-full shadow-lg z-30'}`}
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={20} />}
@@ -98,20 +104,20 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Cloud Sync Status */}
       {!isCollapsed && (
-        <div className="px-6 py-3 border-b border-slate-700/50 flex items-center justify-between group">
+        <div className="px-6 py-3 border-b border-border/50 flex items-center justify-between group">
             {googleUser ? (
                 <div className="flex items-center gap-2 overflow-hidden">
-                    <img src={googleUser.picture} className="w-6 h-6 rounded-full border border-indigo-500/50" alt="profile" />
+                    <img src={googleUser.picture} className="w-6 h-6 rounded-full border border-primary/50" alt="profile" />
                     <div className="flex flex-col min-w-0">
-                        <span className="text-[10px] font-bold text-white truncate">{googleUser.name}</span>
-                        <span className="text-[9px] text-indigo-400 flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-textMain truncate">{googleUser.name}</span>
+                        <span className="text-[9px] text-primary flex items-center gap-1">
                             {isSyncing ? <RefreshCw size={8} className="animate-spin" /> : <Cloud size={8} />}
                             {isSyncing ? 'Syncing...' : 'Cloud Active'}
                         </span>
                     </div>
                 </div>
             ) : (
-                <div className="flex items-center gap-2 text-slate-500 italic">
+                <div className="flex items-center gap-2 text-textMuted italic">
                     <CloudOff size={14} />
                     <span className="text-[10px] font-semibold">Local Session</span>
                 </div>
@@ -120,7 +126,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <button 
                     onClick={onCloudSync}
                     disabled={isSyncing}
-                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                    className="p-1.5 text-textMuted hover:text-textMain hover:bg-surfaceHighlight rounded-md transition-all opacity-0 group-hover:opacity-100"
                     title="Force Sync Now"
                 >
                     <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
@@ -130,10 +136,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Sessions Section */}
-      <div className={`px-4 pt-4 pb-2 border-b border-slate-700/50 flex flex-col ${isCollapsed ? 'items-center' : ''}`}>
+      <div className={`px-4 pt-4 pb-2 border-b border-border/50 flex flex-col ${isCollapsed ? 'items-center' : ''}`}>
         {!isCollapsed && (
           <div 
-            className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 cursor-pointer hover:text-slate-300 transition-colors"
+            className="flex items-center justify-between text-[10px] font-bold text-textMuted uppercase tracking-widest mb-2 cursor-pointer hover:text-textMain transition-colors"
             onClick={() => setIsSessionsExpanded(!isSessionsExpanded)}
           >
             <span>Sessions</span>
@@ -149,19 +155,19 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onSelectSession(session.id)}
                 className={`group flex items-center justify-between rounded-lg text-sm cursor-pointer transition-all ${
                   activeSessionId === session.id 
-                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
-                    : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'
+                    ? 'bg-primary/20 text-primary border border-primary/30' 
+                    : 'text-textMuted hover:bg-surfaceHighlight/50 hover:text-textMain'
                 } ${isCollapsed ? 'p-2' : 'px-3 py-1.5'}`}
                 title={isCollapsed ? session.name : ''}
               >
                 <div className="flex items-center space-x-2 overflow-hidden">
-                  <Folder size={14} className={activeSessionId === session.id ? 'text-indigo-400' : 'text-slate-500'} />
+                  <Folder size={14} className={activeSessionId === session.id ? 'text-primary' : 'text-textMuted'} />
                   {!isCollapsed && <span className="truncate text-xs">{session.name}</span>}
                 </div>
                 {sessions.length > 1 && !isCollapsed && (
                   <button 
                     onClick={(e) => onDeleteSession(e, session.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 hover:text-red-400 rounded transition-all"
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-danger/20 hover:text-danger rounded transition-all"
                   >
                     <Trash2 size={10} />
                   </button>
@@ -171,26 +177,26 @@ const Sidebar: React.FC<SidebarProps> = ({
             
             {!isCollapsed && (
               isCreatingSession ? (
-                <div className="mt-2 p-2 bg-slate-800 rounded-lg border border-slate-600 animate-scale-in">
+                <div className="mt-2 p-2 bg-surfaceHighlight rounded-lg border border-border animate-scale-in">
                   <input
                     autoFocus
                     type="text"
                     placeholder="Session Name"
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500 mb-2"
+                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-textMain focus:outline-none focus:border-primary mb-2"
                     value={newSessionName}
                     onChange={(e) => setNewSessionName(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                   />
                   <div className="flex space-x-1">
-                    <button onClick={handleCreate} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] py-1 rounded font-bold">OK</button>
-                    <button onClick={() => setIsCreatingSession(false)} className="px-2 bg-slate-700 text-slate-300 text-[10px] py-1 rounded"><X size={10}/></button>
+                    <button onClick={handleCreate} className="flex-1 bg-primary hover:bg-primary/90 text-white text-[10px] py-1 rounded font-bold">OK</button>
+                    <button onClick={() => setIsCreatingSession(false)} className="px-2 bg-surfaceHighlight text-textMuted text-[10px] py-1 rounded"><X size={10}/></button>
                   </div>
                 </div>
               ) : (
                 <button 
                   id="tutorial-new-session"
                   onClick={() => setIsCreatingSession(true)} 
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-textMuted hover:text-primary transition-colors"
                 >
                   <Plus size={12} /> New Session
                 </button>
@@ -215,8 +221,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => onSelectTab(item.id as any)}
             className={`w-full flex items-center rounded-xl transition-all ${
               activeTab === item.id 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
-                : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                : 'text-textMuted hover:bg-surfaceHighlight hover:text-textMain'
             } ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
             title={isCollapsed ? item.label : ''}
           >
@@ -225,15 +231,15 @@ const Sidebar: React.FC<SidebarProps> = ({
           </button>
         ))}
 
-        <div className={`border-t border-slate-700 my-2 mx-2 ${isCollapsed ? 'w-8' : 'w-full'}`}></div>
+        <div className={`border-t border-border my-2 mx-2 ${isCollapsed ? 'w-8' : 'w-full'}`}></div>
 
         <button 
           id="tutorial-consult-ai"
           onClick={onToggleChat}
           className={`w-full flex items-center rounded-xl transition-all ${
             isChatOpen 
-              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' 
-              : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+              ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg' 
+              : 'text-textMuted hover:bg-surfaceHighlight hover:text-textMain'
           } ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
           title={isCollapsed ? 'Consult AI' : ''}
         >
@@ -242,16 +248,16 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      <div className={`p-4 border-t border-slate-700 bg-slate-900/30 ${isCollapsed ? 'flex justify-center' : ''}`}>
+      <div className={`p-4 border-t border-border bg-background/30 ${isCollapsed ? 'flex justify-center' : ''}`}>
         <button 
             id="tutorial-import"
             onClick={onImportFile}
-            className={`flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-slate-800 transition-all group ${isCollapsed ? 'w-10 h-10' : 'w-full h-20'}`}
+            className={`flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary hover:bg-surfaceHighlight transition-all group ${isCollapsed ? 'w-10 h-10' : 'w-full h-20'}`}
         >
-          <Upload size={isCollapsed ? 16 : 20} className="text-slate-400 group-hover:text-indigo-400" />
+          <Upload size={isCollapsed ? 16 : 20} className="text-textMuted group-hover:text-primary" />
           {!isCollapsed && (
-            <p className="text-[10px] text-slate-500 group-hover:text-slate-300 text-center px-2 mt-1 uppercase font-bold tracking-tight">
-               Import to <span className="text-indigo-400">{activeSessionName}</span>
+            <p className="text-[10px] text-textMuted group-hover:text-textMain text-center px-2 mt-1 uppercase font-bold tracking-tight">
+               Import to <span className="text-primary">{activeSessionName}</span>
             </p>
           )}
         </button>

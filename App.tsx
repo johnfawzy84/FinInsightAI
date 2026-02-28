@@ -1,29 +1,40 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter } from 'react-router-dom';
-import { Transaction, Category, CategorizationRule, Session, ImportSelection } from './types';
-import Dashboard from './components/Dashboard';
-import TransactionList from './components/TransactionList';
+import { ThemeProvider } from './components/ThemeContext';
+import { useSessionData, applyRulesToTransactions } from './hooks/useSessionData';
+import { Transaction, Session, ImportSelection, Category } from './types';
+import { categorizeTransactionsAI, generateRulesFromHistory } from './services/gemini';
 import AIConsultant from './components/AIConsultant';
-import TransactionDetailModal from './components/TransactionDetailModal';
-import Sidebar from './components/Sidebar';
-import SettingsView from './components/SettingsView';
-import { RuleProgressModal, SanitizationProposalModal, SanitizationResultModal, BulkUpdateModal } from './components/StatusModals';
-import { ImportSelectionModal } from './components/ImportSelectionModal';
 import { SmartImportModal } from './components/SmartImportModal';
 import { ManualTransactionModal } from './components/ManualTransactionModal';
-import { useSessionData, applyRulesToTransactions } from './hooks/useSessionData';
-import { categorizeTransactionsAI, generateRulesFromHistory } from './services/gemini';
-import { BrainCircuit, ShieldCheck, LayoutDashboard, List, MessageSquareText, Settings, Target, Wallet } from 'lucide-react';
-import { GoalManager } from './components/GoalManager';
+import { RuleProgressModal, SanitizationProposalModal, SanitizationResultModal, BulkUpdateModal } from './components/StatusModals';
+import { ImportSelectionModal } from './components/ImportSelectionModal';
+import TransactionDetailModal from './components/TransactionDetailModal';
+import Sidebar from './components/Sidebar';
+import Dashboard from './components/Dashboard';
+import TransactionList from './components/TransactionList';
 import { BudgetManager } from './components/BudgetManager';
+import { GoalManager } from './components/GoalManager';
+import SettingsView from './components/SettingsView';
 import { TutorialOverlay, TutorialStep } from './components/TutorialOverlay';
-import { HelpCircle } from 'lucide-react';
+import { ChangelogModal } from './components/ChangelogModal';
+import { changelog, currentVersion } from './changelog';
+import { MessageSquareText, ShieldCheck, LayoutDashboard, List, Wallet, Target, Settings, HelpCircle, BrainCircuit } from 'lucide-react';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings' | 'goals' | 'budgets'>('dashboard');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+
+  React.useEffect(() => {
+    const lastSeenVersion = localStorage.getItem('finsight_last_version');
+    if (lastSeenVersion !== currentVersion) {
+      setIsChangelogOpen(true);
+      localStorage.setItem('finsight_last_version', currentVersion);
+    }
+  }, []);
   
   const { 
     sessions, 
@@ -427,7 +438,7 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <div className="min-h-screen bg-background text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-x-hidden">
+      <div className="min-h-screen bg-background text-textMain font-sans selection:bg-primary/30 relative overflow-x-hidden">
         
         <AIConsultant 
             transactions={activeSession.transactions} 
@@ -447,7 +458,7 @@ const App: React.FC = () => {
         {!isChatOpen && (
             <button 
                 onClick={() => setIsChatOpen(true)}
-                className="hidden md:flex fixed bottom-8 right-8 z-30 p-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg shadow-indigo-500/30 transition-all hover:scale-110 items-center justify-center animate-bounce-subtle"
+                className="hidden md:flex fixed bottom-8 right-8 z-30 p-4 bg-primary hover:bg-primary/90 text-white rounded-full shadow-lg shadow-primary/30 transition-all hover:scale-110 items-center justify-center animate-bounce-subtle"
                 title="Open Financial Assistant"
             >
                 <MessageSquareText size={24} />
@@ -535,49 +546,50 @@ const App: React.FC = () => {
             googleUser={googleUser}
             isSyncing={isSyncing}
             onCloudSync={syncToCloud}
+            onOpenChangelog={() => setIsChangelogOpen(true)}
         />
 
-        <div className="md:hidden fixed top-0 w-full bg-surface border-b border-slate-700 z-30 px-4 py-3 flex justify-between items-center">
-             <div className="flex items-center space-x-2 text-indigo-400">
+        <div className="md:hidden fixed top-0 w-full bg-surface border-b border-border z-30 px-4 py-3 flex justify-between items-center">
+             <div className="flex items-center space-x-2 text-primary">
                 <ShieldCheck size={24} />
-                <span className="font-bold text-white">FinSight AI</span>
+                <span className="font-bold text-textMain">FinSight AI</span>
             </div>
-            <div className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded border border-slate-700">
+            <div className="text-xs text-textMuted bg-surfaceHighlight px-2 py-1 rounded border border-border">
               {activeSession.name}
             </div>
         </div>
 
-        <div className="md:hidden fixed bottom-0 w-full bg-surface border-t border-slate-700 z-30 flex justify-around p-3 pb-safe">
-             <button onClick={() => setActiveTab('dashboard')} className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><LayoutDashboard size={24} /></button>
-             <button onClick={() => setActiveTab('transactions')} className={`p-2 rounded-lg ${activeTab === 'transactions' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><List size={24} /></button>
-             <button onClick={() => setActiveTab('budgets')} className={`p-2 rounded-lg ${activeTab === 'budgets' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Wallet size={24} /></button>
-             <button onClick={() => setActiveTab('goals')} className={`p-2 rounded-lg ${activeTab === 'goals' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Target size={24} /></button>
-             <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'}`}><Settings size={24} /></button>
+        <div className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border z-30 flex justify-around p-3 pb-safe">
+             <button onClick={() => setActiveTab('dashboard')} className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><LayoutDashboard size={24} /></button>
+             <button onClick={() => setActiveTab('transactions')} className={`p-2 rounded-lg ${activeTab === 'transactions' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><List size={24} /></button>
+             <button onClick={() => setActiveTab('budgets')} className={`p-2 rounded-lg ${activeTab === 'budgets' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Wallet size={24} /></button>
+             <button onClick={() => setActiveTab('goals')} className={`p-2 rounded-lg ${activeTab === 'goals' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Target size={24} /></button>
+             <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Settings size={24} /></button>
         </div>
 
         <main className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'} p-6 pt-20 md:pt-6 pb-24 md:pb-6 min-h-screen ${isChatOpen ? 'md:mr-[450px]' : ''}`}>
             <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
                 <div>
                     <div className="flex items-center space-x-3 mb-2">
-                      <h1 className="text-3xl font-bold text-white">
+                      <h1 className="text-3xl font-bold text-textMain">
                           {activeTab === 'dashboard' && 'Financial Overview'}
                           {activeTab === 'transactions' && 'Transaction History'}
                           {activeTab === 'goals' && 'Goals & Allocations'}
                           {activeTab === 'budgets' && 'Spending Budgets'}
                           {activeTab === 'settings' && 'Session Settings'}
                       </h1>
-                      <span className="px-2 py-1 rounded-md bg-indigo-500/20 text-indigo-300 text-xs border border-indigo-500/30 font-medium">
+                      <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs border border-primary/30 font-medium">
                         {activeSession.name}
                       </span>
                       <button 
                         onClick={() => setIsTutorialOpen(true)}
-                        className="p-1.5 text-indigo-400 bg-indigo-500/10 rounded-full transition-all animate-glow hover:animate-none"
+                        className="p-1.5 text-primary bg-primary/10 rounded-full transition-all animate-glow hover:animate-none"
                         title="Start Tutorial"
                       >
                         <HelpCircle size={20} />
                       </button>
                     </div>
-                    <p className="text-slate-400">
+                    <p className="text-textMuted">
                         {activeTab === 'dashboard' && 'Track your wealth and regular spending.'}
                         {activeTab === 'transactions' && 'Manage and organize your financial records.'}
                         {activeTab === 'goals' && 'Simulate, prioritize, and fund your dreams.'}
@@ -591,7 +603,7 @@ const App: React.FC = () => {
                         id="tutorial-auto-categorize"
                         onClick={handleAutoCategorize}
                         disabled={isCategorizing}
-                        className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-all disabled:opacity-50"
+                        className="flex items-center space-x-2 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-all disabled:opacity-50"
                     >
                         {isCategorizing ? <BrainCircuit className="animate-spin" size={18} /> : <BrainCircuit size={18} />}
                         <span>{isCategorizing ? 'Categorizing...' : 'AI Auto-Categorize'}</span>
@@ -630,13 +642,13 @@ const App: React.FC = () => {
                 />
             )}
             {activeTab === 'goals' && (
-               <GoalManager 
+                <GoalManager 
                     goals={activeSession.goals || []} 
                     assets={activeSession.assets || []}
                     transactions={activeSession.transactions}
                     onUpdateGoals={updateGoals}
                     currency={activeSession.currency || '$'}
-               /> 
+                /> 
             )}
             {activeTab === 'settings' && (
                 <SettingsView 
@@ -668,8 +680,22 @@ const App: React.FC = () => {
             isOpen={isTutorialOpen} 
             onClose={() => setIsTutorialOpen(false)} 
         />
+        
+        <ChangelogModal 
+            release={changelog[0]} 
+            isOpen={isChangelogOpen} 
+            onClose={() => setIsChangelogOpen(false)} 
+        />
       </div>
     </HashRouter>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <AppContent />
+    </ThemeProvider>
   );
 };
 
