@@ -21,6 +21,7 @@ if grep -q "cdn.tailwindcss.com" "$TARGET_FILE"; then
     TMP_HTML=$(mktemp)
     perl -0777 -pe 's/<script src="https:\/\/cdn\.tailwindcss\.com"><\/script>\s*<script>.*?tailwind\.config.*?<\/script>//gs' "$TARGET_FILE" > "$TMP_HTML"
     mv "$TMP_HTML" "$TARGET_FILE"
+    chmod 644 "$TARGET_FILE"
 fi
 
 # 2. REMOVE importmap
@@ -30,6 +31,7 @@ if grep -q "type=\"importmap\"" "$TARGET_FILE"; then
     TMP_HTML=$(mktemp)
     perl -0777 -pe 's/<script type="importmap">.*?<\/script>//gs' "$TARGET_FILE" > "$TMP_HTML"
     mv "$TMP_HTML" "$TARGET_FILE"
+    chmod 644 "$TARGET_FILE"
 fi
 
 # 3. BLOCK Cloudflare Beacon Injection
