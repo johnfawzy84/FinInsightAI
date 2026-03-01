@@ -19,6 +19,7 @@ RUN ./fix-blocked-resources.sh dist/index.html
 FROM nginx:alpine
 # Copy the built files from the build stage
 COPY --from=builder /app/dist /usr/share/nginx/html
+RUN chmod -R a+rX /usr/share/nginx/html
 # (Optional) Copy a custom nginx.conf if you have CSR routing issues
 # COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
