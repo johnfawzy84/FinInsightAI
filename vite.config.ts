@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
           enabled: true
         },
         includeAssets: ['favicon.svg'],
+        scope: '/finsight/',
         manifest: {
           name: 'FinSight AI',
           short_name: 'FinSight',
@@ -23,6 +24,8 @@ export default defineConfig(({ mode }) => {
           theme_color: '#0f172a',
           background_color: '#0f172a',
           display: 'standalone',
+          scope: '/finsight/',
+          start_url: '/finsight/',
           icons: [
             {
               src: 'favicon.svg',
