@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   // Fix: Cast process to any to avoid "Property 'cwd' does not exist on type 'Process'" error
   const env = loadEnv(mode, (process as any).cwd(), '');
   return {
+    base: '/finsight/',
     plugins: [
       react(),
       VitePWA({
