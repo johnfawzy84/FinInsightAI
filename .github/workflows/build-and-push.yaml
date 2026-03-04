@@ -55,3 +55,27 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+
+  deploy:
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Deploy to k3s cluster
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+          chmod 600 ~/.kube/config
+          # Using specific namespace if required by adding -n <namespace>
+          kubectl rollout restart deployment/hello-k3
+          kubectl rollout status deployment/hello-k3
