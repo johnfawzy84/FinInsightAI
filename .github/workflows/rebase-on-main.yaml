@@ -3,7 +3,7 @@ name: Smart Rebase docker-deploy
 on:
   push:
     branches:
-      - docker-deploy
+      - main
   workflow_dispatch:
 
 jobs:
