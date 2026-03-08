@@ -76,6 +76,7 @@ jobs:
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT" > ~/.kube/config
           chmod 600 ~/.kube/config
-          # Using specific namespace if required by adding -n <namespace>
-          kubectl rollout restart deployment/app-finsight
+          export IMAGE_REPO=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          export SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          kubectl set image deployment/app-finsight finsight-app=$IMAGE_REPO:sha-$SHORT_SHA
           kubectl rollout status deployment/app-finsight
