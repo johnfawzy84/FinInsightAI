@@ -111,7 +111,7 @@ async function main() {
         }
 
         console.log("\n▶️ Continuing rebase...");
-        rebaseResult = run('git rebase --continue');
+        rebaseResult = run('GIT_EDITOR=true git rebase --continue');
     }
 
     console.log("\n🎉 Rebase finished successfully without outstanding conflicts!");
