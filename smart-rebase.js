@@ -86,6 +86,9 @@ async function main() {
     console.log("📥 Fetching latest from origin...");
     run('git fetch origin main');
 
+    // Clean up any modifications done by npm install
+    run('git checkout -- .');
+
     // 2. Initiate the rebase
     console.log("🔄 Initiating rebase on origin/main...");
     let rebaseResult = run('git rebase origin/main');
@@ -97,6 +100,7 @@ async function main() {
         const unmergedStr = run('git diff --name-only --diff-filter=U');
         if (unmergedStr instanceof Error || !unmergedStr.trim()) {
             console.error("\n❌ Rebase failed, but no unmerged files found. Manual intervention required. See git status.");
+            console.error(rebaseResult.stderr || rebaseResult.message);
             process.exit(1);
         }
 

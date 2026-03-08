@@ -32,5 +32,5 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          npm install
+          npm ci
           node smart-rebase.js
