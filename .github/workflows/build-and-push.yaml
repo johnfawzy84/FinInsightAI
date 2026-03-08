@@ -77,5 +77,5 @@ jobs:
           echo "$KUBECONFIG_CONTENT" > ~/.kube/config
           chmod 600 ~/.kube/config
           # Using specific namespace if required by adding -n <namespace>
-          kubectl rollout restart deployment/hello-k3
-          kubectl rollout status deployment/hello-k3
+          kubectl rollout restart deployment/app-finsight
+          kubectl rollout status deployment/app-finsight
