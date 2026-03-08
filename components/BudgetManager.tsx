@@ -153,26 +153,26 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
     <div className="space-y-6 animate-fade-in pb-10">
       
       {/* Header Actions */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Wallet className="text-indigo-400" size={24} />
+            <h2 className="text-xl font-bold text-textMain flex items-center gap-2">
+                <Wallet className="text-primary" size={24} />
                 Budget Limits
             </h2>
-            <p className="text-sm text-slate-500">Track and control your spending limits.</p>
+            <p className="text-sm text-textMuted">Track and control your spending limits.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <button 
                 onClick={handleProposeAI}
                 disabled={isProposing}
-                className="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20"
+                className="flex-1 sm:flex-none justify-center bg-secondary hover:bg-secondary/90 disabled:bg-surfaceHighlight text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-secondary/20"
             >
                 {isProposing ? <Loader2 size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
-                AI Propose Budgets
+                AI Propose
             </button>
             <button 
                 onClick={() => setIsAdding(true)}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"
+                className="flex-1 sm:flex-none justify-center bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20"
             >
                 <Plus size={16} /> New Budget
             </button>
@@ -181,51 +181,51 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
 
       {/* Add Form */}
       {isAdding && (
-        <div className="bg-slate-800 p-6 rounded-xl border border-indigo-500/30 animate-scale-in">
+        <div className="bg-surfaceHighlight p-6 rounded-xl border border-primary/30 animate-scale-in">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-white font-bold">Configure New Budget</h3>
-                <button onClick={() => setIsAdding(false)} className="text-slate-400 hover:text-white"><X size={20}/></button>
+                <h3 className="text-textMain font-bold">Configure New Budget</h3>
+                <button onClick={() => setIsAdding(false)} className="text-textMuted hover:text-textMain"><X size={20}/></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="lg:col-span-1">
-                    <label className="text-xs text-slate-500 uppercase block mb-1">Category</label>
+                    <label className="text-xs text-textMuted uppercase block mb-1">Category</label>
                     <select 
                         value={newBudget.category}
                         onChange={e => setNewBudget({...newBudget, category: e.target.value})}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-textMain focus:outline-none focus:border-primary"
                     >
                         <option value="">Select Category</option>
                         {categories.filter(c => c !== 'Income').map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="text-xs text-slate-500 uppercase block mb-1">Limit ({currency})</label>
+                    <label className="text-xs text-textMuted uppercase block mb-1">Limit ({currency})</label>
                     <input 
                         type="number"
                         value={newBudget.limit || ''}
                         onChange={e => setNewBudget({...newBudget, limit: parseFloat(e.target.value)})}
                         disabled={!!newBudget.linkedPocketId}
-                        className={`w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 ${newBudget.linkedPocketId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`w-full bg-background border border-border rounded-lg px-3 py-2 text-textMain focus:outline-none focus:border-primary ${newBudget.linkedPocketId ? 'opacity-50 cursor-not-allowed' : ''}`}
                         placeholder={newBudget.linkedPocketId ? "Linked to Pocket" : "0.00"}
                     />
                 </div>
                 <div>
-                    <label className="text-xs text-slate-500 uppercase block mb-1">Period</label>
+                    <label className="text-xs text-textMuted uppercase block mb-1">Period</label>
                     <select 
                         value={newBudget.period}
                         onChange={e => setNewBudget({...newBudget, period: e.target.value as any})}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-textMain focus:outline-none focus:border-primary"
                     >
                         <option value="monthly">Monthly</option>
                         <option value="yearly">Yearly</option>
                     </select>
                 </div>
                 <div>
-                    <label className="text-xs text-slate-500 uppercase block mb-1">Link Pocket</label>
+                    <label className="text-xs text-textMuted uppercase block mb-1">Link Pocket</label>
                     <select 
                         value={newBudget.linkedPocketId}
                         onChange={e => setNewBudget({...newBudget, linkedPocketId: e.target.value})}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-textMain focus:outline-none focus:border-primary"
                     >
                         <option value="">None (Manual Limit)</option>
                         {pockets.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
@@ -236,7 +236,7 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
                 <button 
                     onClick={handleAdd}
                     disabled={!newBudget.category || (!newBudget.limit && !newBudget.linkedPocketId)}
-                    className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white px-6 py-2 rounded-lg font-bold transition-colors"
+                    className="bg-primary hover:bg-primary/90 disabled:bg-surfaceHighlight text-white px-6 py-2 rounded-lg font-bold transition-colors"
                 >
                     Create Budget
                 </button>
@@ -256,17 +256,17 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
                   <div 
                     key={budget.id} 
                     className={`bg-surface rounded-xl border p-6 shadow-lg transition-all relative group ${
-                        isOver ? 'border-red-500/50 shadow-red-500/10' : 'border-slate-700'
+                        isOver ? 'border-danger/50 shadow-danger/10' : 'border-border'
                     }`}
                   >
                       {/* Detailed Settings Toggle Panel */}
                       {settingsId === budget.id && (
-                          <div className="absolute inset-0 bg-slate-900/95 z-20 p-4 rounded-xl flex flex-col justify-center animate-fade-in space-y-4">
-                              <h4 className="text-sm font-bold text-white uppercase flex items-center gap-2"><Settings2 size={16}/> Budget Settings</h4>
+                          <div className="absolute inset-0 bg-background/95 z-20 p-4 rounded-xl flex flex-col justify-center animate-fade-in space-y-4">
+                              <h4 className="text-sm font-bold text-textMain uppercase flex items-center gap-2"><Settings2 size={16}/> Budget Settings</h4>
                               <div>
-                                  <label className="text-xs text-slate-500 block mb-1">Source Pocket</label>
+                                  <label className="text-xs text-textMuted block mb-1">Source Pocket</label>
                                   <select 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
+                                    className="w-full bg-surfaceHighlight border border-border rounded px-2 py-1 text-sm text-textMain focus:outline-none focus:border-primary"
                                     defaultValue={budget.linkedPocketId || ''}
                                     onChange={(e) => handleUpdate(budget.id, { linkedPocketId: e.target.value })}
                                   >
@@ -275,9 +275,9 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
                                   </select>
                               </div>
                               <div>
-                                  <label className="text-xs text-slate-500 block mb-1">Period</label>
+                                  <label className="text-xs text-textMuted block mb-1">Period</label>
                                   <select 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
+                                    className="w-full bg-surfaceHighlight border border-border rounded px-2 py-1 text-sm text-textMain focus:outline-none focus:border-primary"
                                     defaultValue={budget.period}
                                     onChange={(e) => handleUpdate(budget.id, { period: e.target.value as any })}
                                   >
@@ -285,19 +285,19 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
                                       <option value="yearly">Yearly</option>
                                   </select>
                               </div>
-                              <button onClick={() => setSettingsId(null)} className="bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-xs font-bold uppercase">Close</button>
+                              <button onClick={() => setSettingsId(null)} className="bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-textMain py-2 rounded-lg text-xs font-bold uppercase border border-border">Close</button>
                           </div>
                       )}
 
                       <div className="flex justify-between items-start mb-4">
                           <div>
-                              <h3 className="font-bold text-white text-lg">{budget.category}</h3>
+                              <h3 className="font-bold text-textMain text-lg">{budget.category}</h3>
                               <div className="flex flex-col gap-1">
-                                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                                <span className="text-[10px] text-textMuted uppercase tracking-widest font-bold">
                                     {budget.period} limit
                                 </span>
                                 {linkedPocket && (
-                                    <span className="text-[10px] text-indigo-300 flex items-center gap-1">
+                                    <span className="text-[10px] text-primary flex items-center gap-1">
                                         <Link size={10} /> Pocket: {linkedPocket.title}
                                     </span>
                                 )}
@@ -314,17 +314,17 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
                                                 if (e.key === 'Enter') handleUpdate(budget.id, { limit: parseFloat((e.target as HTMLInputElement).value) });
                                                 if (e.key === 'Escape') setEditingId(null);
                                             }}
-                                            className="w-20 bg-slate-900 border border-indigo-500 rounded px-1 text-sm text-white focus:outline-none"
+                                            className="w-20 bg-background border border-primary rounded px-1 text-sm text-textMain focus:outline-none"
                                         />
-                                        <button onClick={() => setEditingId(null)} className="text-slate-400 hover:text-white"><X size={14}/></button>
+                                        <button onClick={() => setEditingId(null)} className="text-textMuted hover:text-textMain"><X size={14}/></button>
                                     </div>
                                 ) : (
                                     <>
-                                        <button onClick={() => setSettingsId(budget.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-indigo-400 rounded hover:bg-slate-700 transition-all"><Settings2 size={14}/></button>
+                                        <button onClick={() => setSettingsId(budget.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-textMuted hover:text-primary rounded hover:bg-surfaceHighlight transition-all"><Settings2 size={14}/></button>
                                         {!linkedPocket && (
-                                            <button onClick={() => setEditingId(budget.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-white rounded hover:bg-slate-700 transition-all"><Edit2 size={14}/></button>
+                                            <button onClick={() => setEditingId(budget.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-textMuted hover:text-textMain rounded hover:bg-surfaceHighlight transition-all"><Edit2 size={14}/></button>
                                         )}
-                                        <button onClick={() => handleDelete(budget.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 rounded hover:bg-slate-700 transition-all"><Trash2 size={14}/></button>
+                                        <button onClick={() => handleDelete(budget.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-textMuted hover:text-danger rounded hover:bg-surfaceHighlight transition-all"><Trash2 size={14}/></button>
                                     </>
                                 )}
                           </div>
@@ -332,16 +332,16 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
 
                       <div className="flex justify-between items-end mb-2">
                           <div>
-                              <div className="text-2xl font-bold text-white font-mono">
+                              <div className="text-2xl font-bold text-textMain font-mono">
                                   {currency}{budget.spent.toLocaleString()}
                               </div>
-                              <div className="text-xs text-slate-400">Spent so far</div>
+                              <div className="text-xs text-textMuted">Spent so far</div>
                           </div>
                           <div className="text-right">
-                              <div className="text-sm font-semibold text-slate-300 flex items-center justify-end gap-1">
-                                  of {currency}{budget.limit.toLocaleString()} {linkedPocket && <span title="Locked by Pocket Amount"><Lock size={10} className="text-slate-500" /></span>}
+                              <div className="text-sm font-semibold text-textMain flex items-center justify-end gap-1">
+                                  of {currency}{budget.limit.toLocaleString()} {linkedPocket && <span title="Locked by Pocket Amount"><Lock size={10} className="text-textMuted" /></span>}
                               </div>
-                              <div className={`text-xs font-bold ${isOver ? 'text-red-400' : 'text-emerald-400'}`}>
+                              <div className={`text-xs font-bold ${isOver ? 'text-danger' : 'text-success'}`}>
                                   {isOver ? (
                                       <span className="flex items-center gap-1 justify-end"><TrendingUp size={12}/> Over by {currency}{Math.abs(remaining).toLocaleString()}</span>
                                   ) : (
@@ -352,25 +352,25 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
                       </div>
 
                       {/* Progress Bar */}
-                      <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden mb-1">
+                      <div className="w-full bg-surfaceHighlight rounded-full h-2.5 overflow-hidden mb-1">
                           <div 
                             className={`h-full transition-all duration-1000 ${
-                                isOver ? 'bg-red-500' : progress > 80 ? 'bg-amber-500' : 'bg-indigo-500'
+                                isOver ? 'bg-danger' : progress > 80 ? 'bg-amber-500' : 'bg-primary'
                             }`}
                             style={{ width: `${progress}%` }}
                           />
                       </div>
                       
                       {isOver && (
-                          <div className="mt-2 text-[10px] text-red-400 font-bold flex items-center gap-1 animate-pulse">
+                          <div className="mt-2 text-[10px] text-danger font-bold flex items-center gap-1 animate-pulse">
                               <AlertCircle size={10}/> CATEGORY OVER BUDGET
                           </div>
                       )}
                       
                       {linkedPocket && (
-                          <div className="mt-3 pt-3 border-t border-slate-700/50 flex justify-between items-center text-xs">
-                              <span className="text-slate-500">Fund Source Available:</span>
-                              <span className={`font-mono font-bold ${linkedPocket.allocatedAmount < budget.limit ? 'text-amber-400' : 'text-slate-300'}`}>
+                          <div className="mt-3 pt-3 border-t border-border flex justify-between items-center text-xs">
+                              <span className="text-textMuted">Fund Source Available:</span>
+                              <span className={`font-mono font-bold ${linkedPocket.allocatedAmount < budget.limit ? 'text-amber-400' : 'text-textMain'}`}>
                                   {currency}{linkedPocket.allocatedAmount.toLocaleString()}
                               </span>
                           </div>
@@ -380,13 +380,13 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({
           })}
 
           {budgets.length === 0 && !isAdding && (
-              <div className="col-span-full border-2 border-dashed border-slate-800 rounded-2xl p-12 text-center text-slate-600">
+              <div className="col-span-full border-2 border-dashed border-border rounded-2xl p-12 text-center text-textMuted">
                   <PieChart size={48} className="mx-auto mb-4 opacity-20" />
                   <p className="text-lg font-medium">No budgets set up yet.</p>
                   <p className="text-sm mb-6">Use the buttons above to create budgets manually or let AI propose them.</p>
                   <button 
                     onClick={() => setIsAdding(true)}
-                    className="text-indigo-400 hover:text-indigo-300 font-bold underline"
+                    className="text-primary hover:text-primary/80 font-bold underline"
                   >
                       Set your first budget
                   </button>

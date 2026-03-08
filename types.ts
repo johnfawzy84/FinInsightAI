@@ -121,6 +121,13 @@ export interface GoogleUser {
   accessToken: string;
 }
 
+export interface AISettings {
+  provider: 'gemini' | 'local';
+  geminiApiKey?: string;
+  localUrl?: string;
+  localModelName?: string;
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -136,6 +143,7 @@ export interface Session {
   createdAt: number;
   importSettings: ImportSettings;
   lastSyncedAt?: number;
+  aiSettings?: AISettings;
 }
 
 export interface ImportSelection {

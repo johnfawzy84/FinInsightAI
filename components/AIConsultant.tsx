@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeFinancesDeeply, chatWithFinanceAssistant, generateDynamicChart } from '../services/gemini';
-import { Transaction, DashboardWidget, CategorizationRule, Budget, Goal } from '../types';
+import { Transaction, DashboardWidget, CategorizationRule, Budget, Goal, AISettings } from '../types';
 import { Sparkles, Send, BrainCircuit, Loader2, Bot, X, Globe, Copy, Download, Check, Wrench, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import Markdown from 'react-markdown';
 
 interface AIConsultantProps {
   transactions: Transaction[];
@@ -20,6 +19,7 @@ interface AIConsultantProps {
   budgets: Budget[];
   categories: string[];
   currency: string;
+  aiSettings?: AISettings;
 }
 
 interface Proposal {
@@ -51,7 +51,8 @@ const AIConsultant: React.FC<AIConsultantProps> = ({
     goals,
     budgets,
     categories,
-    currency
+    currency,
+    aiSettings
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     { id: 'welcome', role: 'model', content: "Hello! I can analyze your finances, create charts, and help manage your budgets and goals. What do you need?" }
@@ -90,7 +91,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({
 
       if (useThinkingModel) {
         // Thinking model (Text Only for now)
-        const res = await analyzeFinancesDeeply(sortedTransactions, userMessage.content);
+        const res = await analyzeFinancesDeeply(sortedTransactions, userMessage.content, aiSettings);
         responseData = { text: res.text };
       } else {
         // Standard chat with Tools and full context
@@ -99,7 +100,8 @@ const AIConsultant: React.FC<AIConsultantProps> = ({
             history, 
             userMessage.content, 
             sortedTransactions,
-            { goals, budgets, categories }
+            { goals, budgets, categories },
+            aiSettings
         );
       }
 
@@ -180,7 +182,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({
 
       try {
           if (proposal.type === 'create_chart_widget') {
-              const config = await generateDynamicChart(transactions, proposal.args.query);
+              const config = await generateDynamicChart(transactions, proposal.args.query, aiSettings);
               onUpdateDashboardWidgets(prev => [...prev, {
                   id: `custom-${Date.now()}`,
                   type: 'custom',
@@ -291,15 +293,7 @@ const AIConsultant: React.FC<AIConsultantProps> = ({
       }
   };
 
-  const renderMarkdown = (text: string) => {
-      try {
-          const rawMarkup = marked.parse(text) as string;
-          const cleanMarkup = DOMPurify.sanitize(rawMarkup);
-          return { __html: cleanMarkup };
-      } catch (e) {
-          return { __html: text };
-      }
-  };
+
 
   // --- Export & Copy Logic ---
 
@@ -447,8 +441,9 @@ const AIConsultant: React.FC<AIConsultantProps> = ({
                             [&>pre]:bg-slate-900 [&>pre]:p-2 [&>pre]:rounded-lg [&>pre]:overflow-x-auto [&>pre]:mb-2 [&>pre]:text-xs
                             [&>a]:text-indigo-400 [&>a]:underline hover:[&>a]:text-indigo-300
                         `}
-                        dangerouslySetInnerHTML={renderMarkdown(msg.content)}
-                    />
+                    >
+                        <Markdown>{msg.content}</Markdown>
+                    </div>
                     
                     {/* Render Search Sources */}
                     {msg.groundingChunks && msg.groundingChunks.length > 0 && (

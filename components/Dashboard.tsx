@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend,
   Sector, LineChart, Line
 } from 'recharts';
-import { Transaction, TransactionType, Asset, Session, DashboardWidget } from '../types';
+import { Transaction, TransactionType, Asset, Session, DashboardWidget, AISettings } from '../types';
 import { AssetManagerModal } from './AssetManagerModal';
 import { ExpandedChartModal } from './ExpandedChartModal';
 import { generateDynamicChart, predictRecurringExpenses } from '../services/gemini';
@@ -21,6 +21,7 @@ interface DashboardProps {
   activeSession: Session;
   onUpdateDashboardWidgets: (updater: (widgets: DashboardWidget[]) => DashboardWidget[]) => void;
   currency: string;
+  aiSettings?: AISettings;
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -134,7 +135,7 @@ const GenericChartRenderer = ({ config, currency }: { config: any, currency: str
     }
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets, activeSession, onUpdateDashboardWidgets, currency }) => {
+const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets, activeSession, onUpdateDashboardWidgets, currency, aiSettings }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [startDate, setStartDate] = useState(() => {
@@ -184,7 +185,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       }
       setIsLoadingRecurring(true);
       try {
-          const res = await predictRecurringExpenses(transactions);
+          const res = await predictRecurringExpenses(transactions, aiSettings);
           setRecurringData(res);
       } catch (e) {
           console.error(e);
@@ -221,7 +222,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
     setIsGeneratingChart(true);
     setCustomChartConfig(null);
     try {
-        const config = await generateDynamicChart(transactions, customQuery);
+        const config = await generateDynamicChart(transactions, customQuery, aiSettings);
         setCustomChartConfig(config);
     } catch (e) {
         console.error(e);
@@ -253,7 +254,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
       if (!widget.query) return;
       setRefreshingWidgetId(widget.id);
       try {
-          const config = await generateDynamicChart(transactions, widget.query);
+          const config = await generateDynamicChart(transactions, widget.query, aiSettings);
           onUpdateDashboardWidgets(prev => prev.map(w => w.id === widget.id ? { ...w, cachedConfig: config } : w));
       } catch(e) {
           console.error(e);
@@ -281,7 +282,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
     setEditingWidgetId(null);
     setRefreshingWidgetId(widgetId);
     try {
-        const config = await generateDynamicChart(transactions, editWidgetQuery);
+        const config = await generateDynamicChart(transactions, editWidgetQuery, aiSettings);
         onUpdateDashboardWidgets(prev => prev.map(w => w.id === widgetId ? { 
             ...w, 
             query: editWidgetQuery, 
@@ -636,8 +637,8 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                     <div className="flex flex-col h-full">
                         <div className="mb-6 flex justify-between items-start">
                             <div>
-                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Activity className="text-indigo-400" size={20}/> {widget.title}</h3>
-                                <p className="text-xs text-slate-500">Flow from Income to Expenses</p>
+                                <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Activity className="text-primary" size={20}/> {widget.title}</h3>
+                                <p className="text-xs text-textMuted">Flow from Income to Expenses</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <ExpandButton />
@@ -700,9 +701,9 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
              <div className="bg-primary/20 p-2 rounded-lg text-primary"><Sparkles size={20} /></div>
              <div><h3 className="text-xl font-bold text-textMain">AI Insights Designer</h3><p className="text-xs text-primary/80">Describe what you want to visualize (e.g. "Monthly food spending")</p></div>
          </div>
-         <div className="flex gap-2 mb-4">
+         <div className="flex flex-col sm:flex-row gap-2 mb-4">
              <input type="text" value={customQuery} onChange={(e) => setCustomQuery(e.target.value)} placeholder="Ask for a specific graph..." className="flex-1 bg-background/80 border border-border rounded-lg px-4 py-3 text-textMain focus:border-primary outline-none" onKeyDown={(e) => e.key === 'Enter' && handleGenerateCustomChart()} />
-             <button onClick={handleGenerateCustomChart} disabled={isGeneratingChart || !customQuery.trim()} className="bg-primary hover:bg-primary/90 text-white px-6 rounded-lg font-medium flex items-center gap-2">{isGeneratingChart ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} Generate</button>
+             <button onClick={handleGenerateCustomChart} disabled={isGeneratingChart || !customQuery.trim()} className="bg-primary hover:bg-primary/90 text-white px-6 py-3 sm:py-0 rounded-lg font-medium flex items-center justify-center gap-2">{isGeneratingChart ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} Generate</button>
          </div>
          {customChartConfig && (
              <div className="bg-background/50 rounded-xl p-4 border border-primary/20 animate-fade-in min-h-[300px]">
@@ -722,7 +723,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
             <span className="text-textMuted">-</span>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-background border border-border rounded px-3 py-1.5 text-xs text-textMain" />
         </div>
-        <div className="flex bg-background rounded-lg p-1 border border-border">
+        <div className="flex flex-wrap justify-center bg-background rounded-lg p-1 border border-border">
           {['1M', '3M', '6M', 'YTD', 'ALL'].map(opt => <button key={opt} onClick={() => setQuickRange(opt as any)} className="px-3 py-1 text-xs font-medium rounded-md transition-all text-textMuted hover:text-textMain hover:bg-surfaceHighlight">{opt}</button>)}
         </div>
       </div>

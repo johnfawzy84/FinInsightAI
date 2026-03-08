@@ -71,17 +71,17 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+      <div className="bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
         
         {/* Header */}
-        <div className="p-6 border-b border-slate-700 flex justify-between items-start bg-slate-800/50">
+        <div className="p-6 border-b border-border flex justify-between items-start bg-surfaceHighlight/50">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <h2 className="text-xl font-bold text-textMain flex items-center gap-2">
                 Transaction Details
             </h2>
-            <p className="text-slate-400 text-sm mt-1">ID: {transaction.id.split('-')[1]}...</p>
+            <p className="text-textMuted text-sm mt-1">ID: {transaction.id.split('-')[1]}...</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-textMuted hover:text-textMain transition-colors">
             <X size={24} />
           </button>
         </div>
@@ -89,31 +89,31 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
         <div className="p-6 space-y-6 flex-1">
             
             {/* Primary Info Card */}
-            <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-surfaceHighlight rounded-xl p-5 border border-border grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-4">
                     <div className="flex items-start gap-3">
-                        <div className="mt-1 text-indigo-400"><AlignLeft size={18} /></div>
+                        <div className="mt-1 text-primary"><AlignLeft size={18} /></div>
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</label>
-                            <div className="text-white font-medium text-lg">{transaction.description}</div>
+                            <label className="text-xs font-semibold text-textMuted uppercase tracking-wider">Description</label>
+                            <div className="text-textMain font-medium text-lg">{transaction.description}</div>
                         </div>
                     </div>
                     <div className="flex items-start gap-3">
-                        <div className="mt-1 text-indigo-400"><Calendar size={18} /></div>
+                        <div className="mt-1 text-primary"><Calendar size={18} /></div>
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</label>
-                            <div className="text-slate-300">{transaction.date}</div>
+                            <label className="text-xs font-semibold text-textMuted uppercase tracking-wider">Date</label>
+                            <div className="text-textMuted">{transaction.date}</div>
                         </div>
                     </div>
                 </div>
                 <div className="space-y-4">
                      <div className="flex items-start gap-3">
-                        <div className={`mt-1 ${transaction.type === TransactionType.INCOME ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <div className={`mt-1 ${transaction.type === TransactionType.INCOME ? 'text-success' : 'text-danger'}`}>
                             <Calculator size={18} />
                         </div>
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</label>
-                            <div className={`text-2xl font-bold ${transaction.type === TransactionType.INCOME ? 'text-emerald-400' : 'text-white'}`}>
+                            <label className="text-xs font-semibold text-textMuted uppercase tracking-wider">Amount</label>
+                            <div className={`text-2xl font-bold ${transaction.type === TransactionType.INCOME ? 'text-success' : 'text-textMain'}`}>
                                 {currency}{transaction.amount.toFixed(2)}
                             </div>
                         </div>
@@ -122,8 +122,8 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             </div>
 
             {/* Categorization Logic Section */}
-            <div className="bg-slate-800/50 rounded-xl p-5 border border-indigo-500/20">
-                <div className="flex items-center gap-2 mb-4 text-indigo-300">
+            <div className="bg-surfaceHighlight/50 rounded-xl p-5 border border-primary/20">
+                <div className="flex items-center gap-2 mb-4 text-primary">
                     <Tag size={18} />
                     <h3 className="font-semibold">Categorization & Rules</h3>
                 </div>
@@ -131,11 +131,11 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Category Selection */}
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
+                        <label className="block text-sm font-medium text-textMuted mb-2">Category</label>
                         <select 
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-textMain focus:border-primary focus:outline-none"
                         >
                             {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -146,18 +146,18 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                                 id="applySimilar"
                                 checked={applyToSimilar}
                                 onChange={(e) => setApplyToSimilar(e.target.checked)}
-                                className="w-4 h-4 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-900"
+                                className="w-4 h-4 rounded border-border text-primary focus:ring-primary bg-background"
                             />
-                            <label htmlFor="applySimilar" className="text-sm text-slate-300 select-none cursor-pointer">
+                            <label htmlFor="applySimilar" className="text-sm text-textMuted select-none cursor-pointer">
                                 Update <strong>{similarTransactions.length}</strong> similar transactions
                             </label>
                         </div>
                     </div>
 
                     {/* Rule Definition */}
-                    <div className={`p-4 rounded-lg border transition-all ${createRule ? 'bg-indigo-900/10 border-indigo-500/50' : 'bg-slate-900/50 border-slate-700'}`}>
+                    <div className={`p-4 rounded-lg border transition-all ${createRule ? 'bg-primary/10 border-primary/50' : 'bg-background/50 border-border'}`}>
                         <div className="flex justify-between items-center mb-3">
-                            <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                            <label className="text-sm font-medium text-textMuted flex items-center gap-2">
                                 <BookOpen size={16} />
                                 {activeRule ? 'Active Rule' : 'Create Rule'}
                             </label>
@@ -168,27 +168,27 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                                     onChange={(e) => setCreateRule(e.target.checked)}
                                     className="mr-2"
                                 />
-                                <span className="text-xs text-slate-400">{createRule ? 'Enabled' : 'Disabled'}</span>
+                                <span className="text-xs text-textMuted">{createRule ? 'Enabled' : 'Disabled'}</span>
                             </div>
                         </div>
                         
                         {createRule && (
                             <div className="animate-fade-in">
                                 <div className="flex justify-between items-center mb-1">
-                                    <label className="block text-xs text-slate-500">Pattern:</label>
+                                    <label className="block text-xs text-textMuted">Pattern:</label>
                                     <div className="flex items-center gap-1 cursor-pointer" onClick={() => setRuleIsRegex(!ruleIsRegex)}>
-                                        <div className={`w-3 h-3 rounded-full border ${ruleIsRegex ? 'bg-indigo-500 border-indigo-400' : 'border-slate-500'}`}></div>
-                                        <span className={`text-xs ${ruleIsRegex ? 'text-indigo-400' : 'text-slate-500'}`}>Regex</span>
+                                        <div className={`w-3 h-3 rounded-full border ${ruleIsRegex ? 'bg-primary border-primary' : 'border-textMuted'}`}></div>
+                                        <span className={`text-xs ${ruleIsRegex ? 'text-primary' : 'text-textMuted'}`}>Regex</span>
                                     </div>
                                 </div>
                                 <input 
                                     type="text" 
                                     value={ruleKeyword}
                                     onChange={(e) => setRuleKeyword(e.target.value)}
-                                    className={`w-full bg-slate-900 border ${ruleIsRegex ? 'border-indigo-500/50 text-indigo-100 font-mono' : 'border-slate-600 text-white'} rounded px-3 py-2 text-sm focus:border-indigo-500 mb-2`}
+                                    className={`w-full bg-background border ${ruleIsRegex ? 'border-primary/50 text-primary font-mono' : 'border-border text-textMain'} rounded px-3 py-2 text-sm focus:border-primary mb-2`}
                                     placeholder={ruleIsRegex ? "^uber.*" : "e.g. uber"}
                                 />
-                                <p className="text-xs text-indigo-400">
+                                <p className="text-xs text-primary">
                                     <ArrowRight size={12} className="inline mr-1"/>
                                     Sets category to <strong>{category}</strong>
                                 </p>
@@ -206,30 +206,30 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
             {/* Statistics Row */}
             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <label className="text-xs text-slate-500 uppercase font-semibold flex items-center gap-1 mb-1">
+                <div className="bg-surfaceHighlight p-4 rounded-xl border border-border">
+                    <label className="text-xs text-textMuted uppercase font-semibold flex items-center gap-1 mb-1">
                         <Wallet size={14} /> Similar (Description)
                     </label>
-                    <div className="text-lg font-bold text-white">{currency}{totalSimilarAmount.toFixed(2)}</div>
-                    <div className="text-xs text-slate-400">{similarTransactions.length} transactions</div>
+                    <div className="text-lg font-bold text-textMain">{currency}{totalSimilarAmount.toFixed(2)}</div>
+                    <div className="text-xs text-textMuted">{similarTransactions.length} transactions</div>
                 </div>
-                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                     <label className="text-xs text-slate-500 uppercase font-semibold flex items-center gap-1 mb-1">
+                <div className="bg-surfaceHighlight p-4 rounded-xl border border-border">
+                     <label className="text-xs text-textMuted uppercase font-semibold flex items-center gap-1 mb-1">
                         <Tag size={14} /> Category Total
                     </label>
-                    <div className="text-lg font-bold text-white">{currency}{totalCategoryAmount.toFixed(2)}</div>
-                    <div className="text-xs text-slate-400">{categoryTransactions.length} transactions in '{transaction.category}'</div>
+                    <div className="text-lg font-bold text-textMain">{currency}{totalCategoryAmount.toFixed(2)}</div>
+                    <div className="text-xs text-textMuted">{categoryTransactions.length} transactions in '{transaction.category}'</div>
                 </div>
             </div>
 
             {/* Similar Transactions Preview */}
             <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-slate-300">Similar Bookings Preview</h4>
-                <div className="max-h-32 overflow-y-auto border border-slate-700 rounded-lg bg-slate-900/50">
+                <h4 className="text-sm font-semibold text-textMuted">Similar Bookings Preview</h4>
+                <div className="max-h-32 overflow-y-auto border border-border rounded-lg bg-background/50">
                     <table className="w-full text-left text-xs">
-                        <tbody className="divide-y divide-slate-800">
+                        <tbody className="divide-y divide-border">
                             {similarTransactions.slice(0, 10).map(t => (
-                                <tr key={t.id} className="text-slate-400 hover:bg-slate-800/50">
+                                <tr key={t.id} className="text-textMuted hover:bg-surfaceHighlight/50">
                                     <td className="p-2">{t.date}</td>
                                     <td className="p-2 truncate max-w-[200px]">{t.description}</td>
                                     <td className="p-2 text-right">{currency}{t.amount.toFixed(2)}</td>
@@ -238,7 +238,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                         </tbody>
                     </table>
                     {similarTransactions.length > 10 && (
-                        <div className="p-2 text-center text-xs text-slate-500 bg-slate-800/30">
+                        <div className="p-2 text-center text-xs text-textMuted bg-surfaceHighlight/30">
                             + {similarTransactions.length - 10} more...
                         </div>
                     )}
@@ -248,16 +248,16 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-700 flex justify-end gap-3 bg-slate-800/50">
+        <div className="p-4 border-t border-border flex justify-end gap-3 bg-surfaceHighlight/50">
           <button 
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors text-sm font-medium"
+            className="px-4 py-2 rounded-lg text-textMuted hover:text-textMain hover:bg-surfaceHighlight transition-colors text-sm font-medium"
           >
             Cancel
           </button>
           <button 
             onClick={handleSave}
-            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-lg shadow-indigo-500/20 flex items-center gap-2 transition-all"
+            className="px-6 py-2 rounded-lg bg-primary hover:bg-primary/90 text-white font-medium shadow-lg shadow-primary/20 flex items-center gap-2 transition-all"
           >
             <Save size={18} />
             Apply Changes

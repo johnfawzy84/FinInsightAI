@@ -1,21 +1,22 @@
 import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
-import { Transaction, CategorizationRule, Budget, Goal, TransactionType } from "../types";
+import { Transaction, CategorizationRule, Budget, Goal, TransactionType, AISettings } from "../types";
 
-// Helper to retrieve API Key from environment
-const getApiKey = (): string | null => {
+// Helper to retrieve API Key
+const getApiKey = (settings?: AISettings): string | null => {
+  if (settings?.provider === 'gemini' && settings.geminiApiKey) {
+    return settings.geminiApiKey;
+  }
   if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 0) {
     return process.env.GEMINI_API_KEY;
   }
   return null;
 };
 
-const getAI = () => {
-  const apiKey = getApiKey();
+const getAI = (settings?: AISettings) => {
+  const apiKey = getApiKey(settings);
   if (!apiKey) {
-    console.warn("Gemini API Key is missing in process.env.GEMINI_API_KEY");
-    // We might want to throw, or handle it gracefully. 
-    // For now, throwing is consistent with previous behavior but the message should be technical, not user-facing instructions.
-    throw new Error("Gemini API Key is not configured in the environment.");
+    console.warn("Gemini API Key is missing.");
+    throw new Error("Gemini API Key is not configured.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -37,12 +38,131 @@ async function callGeminiWithRetry<T>(
     const isRateLimit = errorCode === 429 || errorCode === 503 || errorMessage.includes('429') || errorMessage.includes('quota');
 
     if (retries > 0 && isRateLimit) {
-      console.warn(`Gemini API Rate Limit hit (${errorCode}). Retrying in ${initialDelay}ms... (${retries} attempts left)`);
+      console.warn(`Rate Limit hit (${errorCode}). Retrying in ${initialDelay}ms...`);
       await delay(initialDelay);
       return callGeminiWithRetry(apiCall, retries - 1, initialDelay * 2);
     }
     throw error;
   }
+}
+
+// Unified AI Caller
+async function callAI(
+  settings: AISettings | undefined,
+  params: {
+    model?: string;
+    systemInstruction?: string;
+    messages: { role: 'user' | 'model' | 'system'; content: string }[];
+    tools?: any[];
+    jsonSchema?: any;
+    jsonMode?: boolean;
+  }
+): Promise<{ text: string; functionCalls?: any[] }> {
+  
+  // 1. Local LLM
+  if (settings?.provider === 'local') {
+    const url = (settings.localUrl || 'http://localhost:11434').replace(/\/$/, '') + '/v1/chat/completions';
+    const model = settings.localModelName || 'llama3';
+    
+    const messages = params.messages.map(m => ({
+      role: m.role === 'model' ? 'assistant' : m.role,
+      content: m.content
+    }));
+
+    if (params.systemInstruction) {
+      messages.unshift({ role: 'system', content: params.systemInstruction });
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: false,
+          format: params.jsonMode ? 'json' : undefined,
+          tools: params.tools ? params.tools.map(t => ({
+             type: 'function',
+             function: {
+               name: t.name,
+               description: t.description,
+               parameters: t.parameters
+             }
+          })) : undefined
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Local LLM Error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const choice = data.choices?.[0];
+      
+      // Handle Tool Calls (OAI format)
+      let functionCalls: any[] = [];
+      if (choice?.message?.tool_calls) {
+        functionCalls = choice.message.tool_calls.map((tc: any) => ({
+          name: tc.function.name,
+          args: JSON.parse(tc.function.arguments)
+        }));
+      }
+
+      return {
+        text: choice?.message?.content || '',
+        functionCalls: functionCalls.length > 0 ? functionCalls : undefined
+      };
+    } catch (e) {
+      console.error("Local LLM Call Failed", e);
+      throw e;
+    }
+  }
+
+  // 2. Gemini (Default)
+  const ai = getAI(settings);
+  const model = params.model || 'gemini-3-flash-preview';
+  
+  const contents = params.messages.map(m => ({
+    role: m.role === 'model' ? 'model' : 'user',
+    parts: [{ text: m.content }]
+  }));
+
+  const config: any = {
+    systemInstruction: params.systemInstruction,
+  };
+
+  if (params.jsonSchema) {
+    config.responseMimeType = "application/json";
+    config.responseSchema = params.jsonSchema;
+  } else if (params.jsonMode) {
+    config.responseMimeType = "application/json";
+  }
+
+  if (params.tools) {
+    // Gemini tools format
+    config.tools = [{ functionDeclarations: params.tools }];
+  }
+
+  return callGeminiWithRetry(async () => {
+    const result = await ai.models.generateContent({
+      model,
+      contents,
+      config
+    });
+    
+    let text = "";
+    let functionCalls: any[] = [];
+    
+    if (result.candidates?.[0]?.content?.parts) {
+      for (const part of result.candidates[0].content.parts) {
+        if (part.text) text += part.text;
+        if (part.functionCall) functionCalls.push(part.functionCall);
+      }
+    }
+
+    return { text, functionCalls: functionCalls.length > 0 ? functionCalls : undefined };
+  });
 }
 
 // --- OPTIMIZATION HELPER ---
@@ -162,11 +282,11 @@ const CONSULTANT_TOOLS: FunctionDeclaration[] = [
 
 export const proposeBudgetsAI = async (
   transactions: Transaction[],
-  availableCategories: string[]
+  availableCategories: string[],
+  settings?: AISettings
 ): Promise<Partial<Budget>[]> => {
   if (transactions.length < 5) return [];
 
-  const ai = getAI();
   // Limit to recent 200 for proposal to save tokens
   const recentTx = transactions.slice(-200).map(t => ({
       c: t.category,
@@ -182,12 +302,10 @@ export const proposeBudgetsAI = async (
   `;
 
   try {
-    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callAI(settings, {
       model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
+      messages: [{ role: 'user', content: prompt }],
+      jsonSchema: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
@@ -198,9 +316,8 @@ export const proposeBudgetsAI = async (
             },
             required: ["category", "limit", "period"]
           }
-        }
       }
-    }));
+    });
 
     return JSON.parse(response.text || "[]");
   } catch (error) {
@@ -211,11 +328,11 @@ export const proposeBudgetsAI = async (
 
 export const categorizeTransactionsAI = async (
   transactions: { id: string; description: string; amount: number }[],
-  availableCategories: string[]
+  availableCategories: string[],
+  settings?: AISettings
 ): Promise<{ id: string; category: string }[]> => {
   if (transactions.length === 0) return [];
 
-  const ai = getAI();
   const catStr = availableCategories.join(', ');
 
   const prompt = `
@@ -227,12 +344,10 @@ export const categorizeTransactionsAI = async (
   `;
 
   try {
-    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callAI(settings, {
       model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
+      messages: [{ role: 'user', content: prompt }],
+      jsonSchema: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
@@ -242,9 +357,8 @@ export const categorizeTransactionsAI = async (
             },
             required: ["id", "category"]
           }
-        }
       }
-    }));
+    });
 
     const text = response.text;
     if (!text) return [];
@@ -257,11 +371,11 @@ export const categorizeTransactionsAI = async (
 
 export const generateRulesFromHistory = async (
   transactions: Transaction[],
-  availableCategories: string[]
+  availableCategories: string[],
+  settings?: AISettings
 ): Promise<CategorizationRule[]> => {
   if (transactions.length < 5) return [];
 
-  const ai = getAI();
   // Limit input
   const categorized = transactions
     .filter(t => t.category !== 'Uncategorized' && t.category !== 'General')
@@ -276,24 +390,21 @@ export const generateRulesFromHistory = async (
   `;
 
   try {
-    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callAI(settings, {
       model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    keyword: { type: Type.STRING },
-                    category: { type: Type.STRING }
-                },
-                required: ["keyword", "category"]
-            }
-        }
+      messages: [{ role: 'user', content: prompt }],
+      jsonSchema: {
+          type: Type.ARRAY,
+          items: {
+              type: Type.OBJECT,
+              properties: {
+                  keyword: { type: Type.STRING },
+                  category: { type: Type.STRING }
+              },
+              required: ["keyword", "category"]
+          }
       }
-    }));
+    });
 
     const rawRules = JSON.parse(response.text || "[]");
     return rawRules.map((r: any) => ({
@@ -309,7 +420,8 @@ export const generateRulesFromHistory = async (
 };
 
 export const predictRecurringExpenses = async (
-  transactions: Transaction[]
+  transactions: Transaction[],
+  settings?: AISettings
 ): Promise<{ 
     total: number; 
     expectedIncome: number;
@@ -317,7 +429,6 @@ export const predictRecurringExpenses = async (
 }> => {
   if (transactions.length < 5) return { total: 0, expectedIncome: 0, breakdown: [] };
 
-  const ai = getAI();
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(new Date().getMonth() - 3);
   
@@ -334,13 +445,11 @@ export const predictRecurringExpenses = async (
   `;
 
   try {
-    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callAI(settings, {
       model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json"
-      }
-    }));
+      messages: [{ role: 'user', content: prompt }],
+      jsonMode: true
+    });
 
     const res = JSON.parse(response.text || '{"totalExpenses": 0, "totalIncome": 0, "breakdown": []}');
     return {
@@ -356,12 +465,11 @@ export const predictRecurringExpenses = async (
 
 export const analyzeFinancesDeeply = async (
   transactions: Transaction[],
-  userQuery: string
+  userQuery: string,
+  settings?: AISettings
 ): Promise<{ text: string }> => {
   if (transactions.length === 0) return { text: "No transaction data available." };
 
-  const ai = getAI();
-  
   // Use optimized context
   const context = prepareEfficientContext(transactions);
 
@@ -380,18 +488,15 @@ export const analyzeFinancesDeeply = async (
   `;
 
   try {
-    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callAI(settings, {
       model: "gemini-3-pro-preview",
-      contents: prompt,
-      config: {
-        thinkingConfig: { thinkingBudget: 8192 }, 
-      }
-    }));
+      messages: [{ role: 'user', content: prompt }]
+    });
 
     return { text: response.text || "Analysis failed." };
   } catch (error) {
     console.error("Error in deep analysis:", error);
-    return { text: "Sorry, I encountered an error (likely rate limit). Please try again in a moment." };
+    return { text: "Sorry, I encountered an error. Please try again in a moment." };
   }
 };
 
@@ -399,11 +504,10 @@ export const chatWithFinanceAssistant = async (
   history: { role: 'user' | 'model'; content: string }[],
   currentMessage: string,
   transactions: Transaction[],
-  contextData: { goals: Goal[], budgets: Budget[], categories: string[] }
+  contextData: { goals: Goal[], budgets: Budget[], categories: string[] },
+  settings?: AISettings
 ): Promise<{ text?: string, groundingChunks?: any[], functionCalls?: any[] }> => {
     
-  const ai = getAI();
-  
   // Use optimized context
   const context = prepareEfficientContext(transactions);
 
@@ -424,52 +528,33 @@ export const chatWithFinanceAssistant = async (
   `;
 
   try {
-    const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-            ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
-            { role: 'user', parts: [{ text: currentMessage }] }
-        ],
-        config: { 
-            systemInstruction,
-            tools: [
-                { googleSearch: {} }, 
-                { functionDeclarations: CONSULTANT_TOOLS }
-            ]
-        }
-    }));
+    const messages: { role: 'user' | 'model' | 'system'; content: string }[] = [
+        ...history.map(h => ({ role: h.role as 'user' | 'model', content: h.content })),
+        { role: 'user', content: currentMessage }
+    ];
 
-    let text = "";
-    let functionCalls: any[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-
-    if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
-        for (const part of response.candidates[0].content.parts) {
-            if (part.text) text += part.text;
-            if (part.functionCall) functionCalls.push(part.functionCall);
-        }
-    }
+    const response = await callAI(settings, {
+      model: "gemini-3-flash-preview",
+      systemInstruction,
+      messages,
+      tools: CONSULTANT_TOOLS
+    });
 
     return { 
-        text: text || (functionCalls.length > 0 ? "I've prepared a proposal." : "No response generated."),
-        groundingChunks: chunks,
-        functionCalls: functionCalls.length > 0 ? functionCalls : undefined
+        text: response.text || (response.functionCalls && response.functionCalls.length > 0 ? "I've prepared a proposal." : "No response generated."),
+        functionCalls: response.functionCalls
     };
   } catch (error: any) {
     console.error("Chat error:", error);
-    const isQuota = error?.status === 429 || error?.error?.code === 429;
-    if (isQuota) {
-        return { text: "⚠️ You have exceeded the Gemini API Rate Limit (429). Please wait a minute." };
-    }
-    return { text: "Connection error. Check API Key." };
+    return { text: "Connection error. Check API Key or Local LLM settings." };
   }
 };
 
 export const generateDynamicChart = async (
     transactions: Transaction[],
-    userQuery: string
+    userQuery: string,
+    settings?: AISettings
   ): Promise<any> => {
-    const ai = getAI();
     
     // For charts, we need raw data, but maybe not ALL of it if it's huge.
     // However, charts usually need specific aggregations. 
@@ -489,13 +574,11 @@ export const generateDynamicChart = async (
     `;
   
     try {
-      const response = await callGeminiWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+      const response = await callAI(settings, {
         model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-        }
-      }));
+        messages: [{ role: 'user', content: prompt }],
+        jsonMode: true
+      });
   
       return JSON.parse(response.text || "{}");
     } catch (error) {

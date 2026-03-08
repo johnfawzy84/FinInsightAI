@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Session, CategorizationRule, ImportSettings, Transaction, DashboardWidget, GoogleUser } from '../types';
+import { Session, CategorizationRule, ImportSettings, Transaction, DashboardWidget, GoogleUser, AISettings } from '../types';
 import { useTheme } from './ThemeContext';
 import { 
   FileJson, 
@@ -55,6 +55,7 @@ interface SettingsViewProps {
   onCloudLoad: () => void;
   isSyncing: boolean;
   onUpdateCurrency: (currency: string) => void;
+  onUpdateAISettings: (settings: AISettings) => void;
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({
@@ -77,7 +78,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onCloudSave,
   onCloudLoad,
   isSyncing,
-  onUpdateCurrency
+  onUpdateCurrency,
+  onUpdateAISettings
 }) => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newRule, setNewRule] = useState<{ keyword: string, category: string, isRegex: boolean }>({ keyword: '', category: '', isRegex: false });
@@ -195,26 +197,98 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <div>
                     <h3 className="text-xl font-bold text-textMain">AI Reasoning Service</h3>
-                    <p className="text-sm text-textMuted">Powered by Google Gemini.</p>
+                    <p className="text-sm text-textMuted">Configure your AI provider (Gemini or Local LLM).</p>
                 </div>
             </div>
         </div>
-        <div className="p-6 flex flex-col md:flex-row gap-6 items-center">
-            <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-2">
-                    <span className="text-sm text-textMuted font-medium">Service Provider:</span>
-                    <span className="text-xs bg-surfaceHighlight text-primary px-2 py-0.5 rounded border border-primary/20 font-bold uppercase tracking-wider">Google Gemini API</span>
+        <div className="p-6 space-y-6">
+            {/* Provider Selection */}
+            <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-textMain">AI Provider</label>
+                <div className="flex gap-4">
+                    <label className={`flex-1 flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${activeSession.aiSettings?.provider === 'gemini' || !activeSession.aiSettings?.provider ? 'bg-primary/10 border-primary shadow-md' : 'bg-surfaceHighlight border-border hover:border-primary/50'}`}>
+                        <input 
+                            type="radio" 
+                            name="aiProvider" 
+                            value="gemini" 
+                            checked={activeSession.aiSettings?.provider === 'gemini' || !activeSession.aiSettings?.provider}
+                            onChange={() => onUpdateAISettings({ ...activeSession.aiSettings, provider: 'gemini', geminiApiKey: activeSession.aiSettings?.geminiApiKey, localUrl: activeSession.aiSettings?.localUrl, localModelName: activeSession.aiSettings?.localModelName })}
+                            className="hidden"
+                        />
+                        <div className="bg-white p-1.5 rounded-full shadow-sm"><Zap size={16} className="text-amber-500" /></div>
+                        <div>
+                            <div className="font-bold text-textMain">Google Gemini</div>
+                            <div className="text-xs text-textMuted">Fast, reliable, cloud-based.</div>
+                        </div>
+                    </label>
+                    <label className={`flex-1 flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${activeSession.aiSettings?.provider === 'local' ? 'bg-primary/10 border-primary shadow-md' : 'bg-surfaceHighlight border-border hover:border-primary/50'}`}>
+                        <input 
+                            type="radio" 
+                            name="aiProvider" 
+                            value="local" 
+                            checked={activeSession.aiSettings?.provider === 'local'}
+                            onChange={() => onUpdateAISettings({ ...activeSession.aiSettings, provider: 'local', geminiApiKey: activeSession.aiSettings?.geminiApiKey, localUrl: activeSession.aiSettings?.localUrl, localModelName: activeSession.aiSettings?.localModelName })}
+                            className="hidden"
+                        />
+                        <div className="bg-white p-1.5 rounded-full shadow-sm"><Database size={16} className="text-blue-500" /></div>
+                        <div>
+                            <div className="font-bold text-textMain">Local LLM</div>
+                            <div className="text-xs text-textMuted">Ollama, LM Studio, etc.</div>
+                        </div>
+                    </label>
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-sm text-textMuted font-medium">Status:</span>
-                    <span className="text-xs text-secondary flex items-center gap-1 font-bold">
-                        <CheckCircle size={14} /> Active (Managed by Platform)
-                    </span>
-                </div>
-                <p className="text-[11px] text-textMuted italic max-w-lg mt-1">
-                    The AI service is pre-configured and managed by the platform environment. No manual key setup required.
-                </p>
             </div>
+
+            {/* Configuration Fields */}
+            {(activeSession.aiSettings?.provider === 'gemini' || !activeSession.aiSettings?.provider) ? (
+                <div className="space-y-4 animate-fade-in">
+                    <div>
+                        <label className="text-sm font-medium text-textMain block mb-1">Gemini API Key (Optional)</label>
+                        <input 
+                            type="password" 
+                            value={activeSession.aiSettings?.geminiApiKey || ''}
+                            onChange={(e) => onUpdateAISettings({ ...activeSession.aiSettings, provider: 'gemini', geminiApiKey: e.target.value })}
+                            placeholder="Use default environment key"
+                            className="w-full bg-surfaceHighlight border border-border rounded-lg px-4 py-2.5 text-sm text-textMain focus:outline-none focus:border-primary transition-all"
+                        />
+                        <p className="text-xs text-textMuted mt-1">Leave empty to use the platform's default key.</p>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-4 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium text-textMain block mb-1">Base URL</label>
+                            <input 
+                                type="text" 
+                                value={activeSession.aiSettings?.localUrl || 'http://localhost:11434'}
+                                onChange={(e) => onUpdateAISettings({ ...activeSession.aiSettings, provider: 'local', localUrl: e.target.value })}
+                                placeholder="http://localhost:11434"
+                                className="w-full bg-surfaceHighlight border border-border rounded-lg px-4 py-2.5 text-sm text-textMain focus:outline-none focus:border-primary transition-all font-mono"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-textMain block mb-1">Model Name</label>
+                            <input 
+                                type="text" 
+                                value={activeSession.aiSettings?.localModelName || 'llama3'}
+                                onChange={(e) => onUpdateAISettings({ ...activeSession.aiSettings, provider: 'local', localModelName: e.target.value })}
+                                placeholder="llama3"
+                                className="w-full bg-surfaceHighlight border border-border rounded-lg px-4 py-2.5 text-sm text-textMain focus:outline-none focus:border-primary transition-all font-mono"
+                            />
+                        </div>
+                    </div>
+                    <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg flex gap-3 items-start">
+                        <Info size={16} className="text-blue-500 mt-0.5 shrink-0" />
+                        <p className="text-xs text-blue-400">
+                            Ensure your local server is running and accessible. For Ollama, run <code>ollama serve</code>. 
+                            The app will attempt to connect to <code>{activeSession.aiSettings?.localUrl || 'http://localhost:11434'}/v1/chat/completions</code>.
+                            <br/>
+                            <strong>Note:</strong> You may need to enable CORS on your local server or use a browser extension to bypass CORS errors if connecting from a browser.
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
       </section>
 
@@ -326,7 +400,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* 4. Session Data (Import/Export/Currency) */}
       <section id="tutorial-session-data" className="bg-surface rounded-xl border border-border overflow-hidden shadow-lg">
-         <div className="p-6 border-b border-border bg-surfaceHighlight/30 flex items-center justify-between">
+         <div className="p-4 sm:p-6 border-b border-border bg-surfaceHighlight/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
                 <div className="bg-amber-500/20 p-2 rounded-lg text-amber-400">
                     <Database size={24} />
@@ -336,12 +410,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     <p className="text-sm text-textMuted">Manage sources, currency, and backup.</p>
                 </div>
             </div>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2 bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-textMain px-4 py-2 rounded-lg text-sm font-bold border border-border transition-all cursor-pointer">
+            <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+              <label className="flex-1 sm:flex-none justify-center flex items-center gap-2 bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-textMain px-4 py-2 rounded-lg text-sm font-bold border border-border transition-all cursor-pointer">
                   <Upload size={18} /> Import Session
                   <input type="file" accept=".json" onChange={onImportSession} className="hidden" />
               </label>
-              <button onClick={onExportSession} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-primary/20">
+              <button onClick={onExportSession} className="flex-1 sm:flex-none justify-center flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-primary/20">
                   <Download size={18} /> Export Session
               </button>
             </div>
@@ -403,7 +477,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* 5. Categorization Rules */}
       <section className="bg-surface rounded-xl border border-border overflow-hidden shadow-lg">
-        <div className="p-6 border-b border-border bg-surfaceHighlight/30 flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-border bg-surfaceHighlight/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
                 <div className="bg-primary/20 p-2 rounded-lg text-primary">
                     <Zap size={24} />
@@ -413,21 +487,21 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     <p className="text-sm text-textMuted">Rules are checked against transaction descriptions.</p>
                 </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 <button 
                     onClick={onGenerateRules}
                     disabled={isGeneratingRules}
-                    className="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:bg-surfaceHighlight text-white px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                    className="flex-1 sm:flex-none justify-center flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:bg-surfaceHighlight text-white px-4 py-2 rounded-lg text-sm font-bold transition-all"
                 >
                     {isGeneratingRules ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    AI Generate Rules
+                    AI Generate
                 </button>
                 <button 
                     onClick={onApplyRulesToExisting}
-                    className="flex items-center gap-2 bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-textMain px-4 py-2 rounded-lg text-sm font-bold border border-border transition-all"
+                    className="flex-1 sm:flex-none justify-center flex items-center gap-2 bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-textMain px-4 py-2 rounded-lg text-sm font-bold border border-border transition-all"
                 >
                     <RefreshCw size={16} />
-                    Apply All Rules
+                    Apply All
                 </button>
             </div>
         </div>
@@ -519,7 +593,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* 6. Category Manager */}
       <section className="bg-surface rounded-xl border border-border overflow-hidden shadow-lg">
-         <div className="p-6 border-b border-border bg-surfaceHighlight/30 flex items-center justify-between">
+         <div className="p-4 sm:p-6 border-b border-border bg-surfaceHighlight/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
                 <div className="bg-secondary/20 p-2 rounded-lg text-secondary">
                     <List size={24} />
@@ -531,7 +605,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
             <button 
                 onClick={onSanitizeCategories}
-                className="flex items-center gap-2 text-danger hover:bg-danger/10 px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                className="w-full sm:w-auto flex justify-center items-center gap-2 text-danger hover:bg-danger/10 px-4 py-2 rounded-lg text-sm font-bold transition-all"
             >
                 <Eraser size={16} /> Clean Unused
             </button>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection, Goal, Budget, GoogleUser } from '../types';
+import { Session, Transaction, CategorizationRule, ImportSettings, DEFAULT_CATEGORIES, TransactionType, Category, Asset, DashboardWidget, ImportSelection, Goal, Budget, GoogleUser, AISettings } from '../types';
 import { initGoogleClient, loginToGoogle, saveToDrive, loadFromDrive } from '../services/googleDrive';
 
 export const applyRulesToTransactions = (transactions: Transaction[], rules: CategorizationRule[]): Transaction[] => {
@@ -315,6 +315,10 @@ export const useSessionData = () => {
     }));
   };
 
+  const updateAISettings = (newSettings: AISettings) => {
+    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, aiSettings: newSettings } : s));
+  };
+
   return {
     sessions,
     activeSession,
@@ -337,6 +341,7 @@ export const useSessionData = () => {
     isSyncing,
     handleGoogleLogin,
     syncToCloud,
-    syncFromCloud
+    syncFromCloud,
+    updateAISettings
   };
 };

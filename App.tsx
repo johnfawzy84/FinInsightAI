@@ -19,7 +19,7 @@ import SettingsView from './components/SettingsView';
 import { TutorialOverlay, TutorialStep } from './components/TutorialOverlay';
 import { ChangelogModal } from './components/ChangelogModal';
 import { changelog, currentVersion } from './changelog';
-import { MessageSquareText, ShieldCheck, LayoutDashboard, List, Wallet, Target, Settings, HelpCircle, BrainCircuit } from 'lucide-react';
+import { MessageSquareText, ShieldCheck, LayoutDashboard, List, Wallet, Target, Settings, HelpCircle, BrainCircuit, Upload } from 'lucide-react';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings' | 'goals' | 'budgets'>('dashboard');
@@ -58,7 +58,8 @@ const AppContent: React.FC = () => {
     isSyncing,
     handleGoogleLogin,
     syncToCloud,
-    syncFromCloud
+    syncFromCloud,
+    updateAISettings
   } = useSessionData();
 
   const [isCategorizing, setIsCategorizing] = useState(false);
@@ -266,7 +267,8 @@ const AppContent: React.FC = () => {
     try {
         const results = await categorizeTransactionsAI(
             uncategorized.map(t => ({ id: t.id, description: t.description, amount: t.amount })),
-            activeSession.categories
+            activeSession.categories,
+            activeSession.aiSettings
         );
 
         updateTransactions(prev => prev.map(t => {
@@ -355,7 +357,7 @@ const AppContent: React.FC = () => {
   const handleGenerateRules = async () => {
     setIsGeneratingRules(true);
     try {
-        const newRules = await generateRulesFromHistory(activeSession.transactions, activeSession.categories);
+        const newRules = await generateRulesFromHistory(activeSession.transactions, activeSession.categories, activeSession.aiSettings);
         if (newRules.length > 0) {
             const existingKeywords = activeSession.rules.map(r => r.keyword);
             const uniqueNewRules = newRules.filter(r => !existingKeywords.includes(r.keyword));
@@ -460,12 +462,14 @@ const AppContent: React.FC = () => {
             budgets={activeSession.budgets || []}
             categories={activeSession.categories}
             currency={activeSession.currency || '$'}
+            aiSettings={activeSession.aiSettings}
         />
         
         {!isChatOpen && (
             <button 
+                id="tutorial-consult-ai-mobile"
                 onClick={() => setIsChatOpen(true)}
-                className="hidden md:flex fixed bottom-8 right-8 z-30 p-4 bg-primary hover:bg-primary/90 text-white rounded-full shadow-lg shadow-primary/30 transition-all hover:scale-110 items-center justify-center animate-bounce-subtle"
+                className="flex fixed bottom-20 right-4 md:bottom-8 md:right-8 z-30 p-4 bg-primary hover:bg-primary/90 text-white rounded-full shadow-lg shadow-primary/30 transition-all hover:scale-110 items-center justify-center animate-bounce-subtle"
                 title="Open Financial Assistant"
             >
                 <MessageSquareText size={24} />
@@ -561,17 +565,27 @@ const AppContent: React.FC = () => {
                 <ShieldCheck size={24} />
                 <span className="font-bold text-textMain">FinSight AI</span>
             </div>
-            <div className="text-xs text-textMuted bg-surfaceHighlight px-2 py-1 rounded border border-border">
-              {activeSession.name}
+            <div className="flex items-center space-x-2">
+                <button 
+                    id="tutorial-import-mobile"
+                    onClick={() => setIsSmartImportOpen(true)} 
+                    className="p-1.5 text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors"
+                    title="Import Data"
+                >
+                    <Upload size={18} />
+                </button>
+                <div id="tutorial-new-session-mobile" className="text-xs text-textMuted bg-surfaceHighlight px-2 py-1 rounded border border-border max-w-[100px] truncate">
+                  {activeSession.name}
+                </div>
             </div>
         </div>
 
         <div className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border z-30 flex justify-around p-3 pb-safe">
              <button onClick={() => setActiveTab('dashboard')} className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><LayoutDashboard size={24} /></button>
-             <button onClick={() => setActiveTab('transactions')} className={`p-2 rounded-lg ${activeTab === 'transactions' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><List size={24} /></button>
-             <button onClick={() => setActiveTab('budgets')} className={`p-2 rounded-lg ${activeTab === 'budgets' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Wallet size={24} /></button>
-             <button onClick={() => setActiveTab('goals')} className={`p-2 rounded-lg ${activeTab === 'goals' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Target size={24} /></button>
-             <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Settings size={24} /></button>
+             <button id="tutorial-nav-transactions-mobile" onClick={() => setActiveTab('transactions')} className={`p-2 rounded-lg ${activeTab === 'transactions' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><List size={24} /></button>
+             <button id="tutorial-nav-budgets-mobile" onClick={() => setActiveTab('budgets')} className={`p-2 rounded-lg ${activeTab === 'budgets' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Wallet size={24} /></button>
+             <button id="tutorial-nav-goals-mobile" onClick={() => setActiveTab('goals')} className={`p-2 rounded-lg ${activeTab === 'goals' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Target size={24} /></button>
+             <button id="tutorial-nav-settings-mobile" onClick={() => setActiveTab('settings')} className={`p-2 rounded-lg ${activeTab === 'settings' ? 'text-primary bg-primary/10' : 'text-textMuted'}`}><Settings size={24} /></button>
         </div>
 
         <main className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'} p-6 pt-20 md:pt-6 pb-24 md:pb-6 min-h-screen ${isChatOpen ? 'md:mr-[450px]' : ''}`}>
@@ -626,6 +640,7 @@ const AppContent: React.FC = () => {
                     activeSession={activeSession}
                     onUpdateDashboardWidgets={updateDashboardWidgets}
                     currency={activeSession.currency || '$'}
+                    aiSettings={activeSession.aiSettings}
                 />
             )}
             {activeTab === 'transactions' && (
@@ -679,6 +694,7 @@ const AppContent: React.FC = () => {
                     onCloudLoad={syncFromCloud}
                     isSyncing={isSyncing}
                     onUpdateCurrency={(c) => updateSessionRaw(s => ({ ...s, currency: c }))}
+                    onUpdateAISettings={updateAISettings}
                 />
             )}
         </main>

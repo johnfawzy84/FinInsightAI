@@ -31,9 +31,19 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ steps, isOpen,
 
     // Wait for DOM update
     setTimeout(() => {
-        const element = document.getElementById(currentStep.targetId);
-        if (element) {
-          const rect = element.getBoundingClientRect();
+        let element = document.getElementById(currentStep.targetId);
+        let rect = element ? element.getBoundingClientRect() : null;
+
+        // Fallback to mobile ID if element is missing or hidden
+        if (!element || (rect && rect.width === 0 && rect.height === 0)) {
+            const mobileElement = document.getElementById(`${currentStep.targetId}-mobile`);
+            if (mobileElement) {
+                element = mobileElement;
+                rect = mobileElement.getBoundingClientRect();
+            }
+        }
+
+        if (element && rect) {
           // Check if element is visible
           if (rect.width > 0 && rect.height > 0) {
               setTargetRect(rect);
