@@ -13,7 +13,8 @@ export const changelog: Release[] = [
     features: [
       "Added theme-aware color variables to all UI elements.",
       "Added a new Danger Zone section in settings.",
-      "Added possibility to add your own local LLM"
+      "Added possibility to add your own local LLM",
+      "Full Progressive Web App (PWA) support with offline capabilities and install prompt."
     ],
     bugFixes: [
       "Fixed the Add button in categories being cut-off in mobile view.",

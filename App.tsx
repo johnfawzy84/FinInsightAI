@@ -27,6 +27,29 @@ const AppContent: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   React.useEffect(() => {
     const lastSeenVersion = localStorage.getItem('finsight_last_version');
@@ -558,6 +581,7 @@ const AppContent: React.FC = () => {
             isSyncing={isSyncing}
             onCloudSync={syncToCloud}
             onOpenChangelog={() => setIsChangelogOpen(true)}
+            onInstall={deferredPrompt ? handleInstall : undefined}
         />
 
         <div className="md:hidden fixed top-0 w-full bg-surface border-b border-border z-30 px-4 py-3 flex justify-between items-center">
@@ -566,6 +590,15 @@ const AppContent: React.FC = () => {
                 <span className="font-bold text-textMain">FinSight AI</span>
             </div>
             <div className="flex items-center space-x-2">
+                {deferredPrompt && (
+                    <button 
+                        onClick={handleInstall}
+                        className="p-1.5 text-secondary bg-secondary/10 hover:bg-secondary/20 rounded-lg transition-colors mr-1"
+                        title="Install App"
+                    >
+                        <ShieldCheck size={18} />
+                    </button>
+                )}
                 <button 
                     id="tutorial-import-mobile"
                     onClick={() => setIsSmartImportOpen(true)} 

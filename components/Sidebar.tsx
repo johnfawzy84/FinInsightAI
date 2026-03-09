@@ -43,6 +43,7 @@ interface SidebarProps {
   isSyncing: boolean;
   onCloudSync: () => void;
   onOpenChangelog: () => void;
+  onInstall?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -62,7 +63,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   googleUser,
   isSyncing,
   onCloudSync,
-  onOpenChangelog
+  onOpenChangelog,
+  onInstall
 }) => {
   const [isSessionsExpanded, setIsSessionsExpanded] = useState(true);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -262,6 +264,17 @@ const Sidebar: React.FC<SidebarProps> = ({
           <Bug size={18} />
           {!isCollapsed && <span className="font-medium text-sm">Report Bug / Request Feature</span>}
         </button>
+
+        {onInstall && (
+          <button 
+            onClick={onInstall}
+            className={`w-full flex items-center rounded-xl transition-all text-secondary bg-secondary/10 hover:bg-secondary/20 ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
+            title={isCollapsed ? 'Install App' : ''}
+          >
+            <ShieldCheck size={18} />
+            {!isCollapsed && <span className="font-medium text-sm">Install App</span>}
+          </button>
+        )}
       </div>
 
       <div className={`p-4 border-t border-border bg-background/30 ${isCollapsed ? 'flex justify-center' : ''}`}>
