@@ -18,15 +18,19 @@ import { GoalManager } from './components/GoalManager';
 import SettingsView from './components/SettingsView';
 import { TutorialOverlay, TutorialStep } from './components/TutorialOverlay';
 import { ChangelogModal } from './components/ChangelogModal';
+import { DocumentationModal } from './components/DocumentationModal';
 import { changelog, currentVersion } from './changelog';
 import { MessageSquareText, ShieldCheck, LayoutDashboard, List, Wallet, Target, Settings, HelpCircle, BrainCircuit, Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const AppContent: React.FC = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings' | 'goals' | 'budgets'>('dashboard');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
@@ -581,6 +585,7 @@ const AppContent: React.FC = () => {
             isSyncing={isSyncing}
             onCloudSync={syncToCloud}
             onOpenChangelog={() => setIsChangelogOpen(true)}
+            onOpenDocumentation={() => setIsDocumentationOpen(true)}
             onInstall={deferredPrompt ? handleInstall : undefined}
         />
 
@@ -626,11 +631,11 @@ const AppContent: React.FC = () => {
                 <div>
                     <div className="flex items-center space-x-3 mb-2">
                       <h1 className="text-3xl font-bold text-textMain">
-                          {activeTab === 'dashboard' && 'Financial Overview'}
-                          {activeTab === 'transactions' && 'Transaction History'}
-                          {activeTab === 'goals' && 'Goals & Allocations'}
-                          {activeTab === 'budgets' && 'Spending Budgets'}
-                          {activeTab === 'settings' && 'Session Settings'}
+                          {activeTab === 'dashboard' && t('app.financialOverview')}
+                          {activeTab === 'transactions' && t('app.transactionHistory')}
+                          {activeTab === 'goals' && t('app.goalsAllocations')}
+                          {activeTab === 'budgets' && t('app.spendingBudgets')}
+                          {activeTab === 'settings' && t('app.sessionSettings')}
                       </h1>
                       <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs border border-primary/30 font-medium">
                         {activeSession.name}
@@ -644,11 +649,11 @@ const AppContent: React.FC = () => {
                       </button>
                     </div>
                     <p className="text-textMuted">
-                        {activeTab === 'dashboard' && 'Track your wealth and regular spending.'}
-                        {activeTab === 'transactions' && 'Manage and organize your financial records.'}
-                        {activeTab === 'goals' && 'Simulate, prioritize, and fund your dreams.'}
-                        {activeTab === 'budgets' && 'Monitor category spending against your limits.'}
-                        {activeTab === 'settings' && 'Configure cloud sync and rules.'}
+                        {activeTab === 'dashboard' && t('app.descDashboard')}
+                        {activeTab === 'transactions' && t('app.descTransactions')}
+                        {activeTab === 'goals' && t('app.descGoals')}
+                        {activeTab === 'budgets' && t('app.descBudgets')}
+                        {activeTab === 'settings' && t('app.descSettings')}
                     </p>
                 </div>
                 
@@ -660,7 +665,7 @@ const AppContent: React.FC = () => {
                         className="flex items-center space-x-2 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-all disabled:opacity-50"
                     >
                         {isCategorizing ? <BrainCircuit className="animate-spin" size={18} /> : <BrainCircuit size={18} />}
-                        <span>{isCategorizing ? 'Categorizing...' : 'AI Auto-Categorize'}</span>
+                        <span>{isCategorizing ? t('app.categorizing') : t('app.aiAutoCategorize')}</span>
                     </button>
                 )}
             </header>
@@ -741,6 +746,11 @@ const AppContent: React.FC = () => {
             release={changelog[0]} 
             isOpen={isChangelogOpen} 
             onClose={() => setIsChangelogOpen(false)} 
+        />
+        
+        <DocumentationModal 
+            isOpen={isDocumentationOpen} 
+            onClose={() => setIsDocumentationOpen(false)} 
         />
       </div>
     </HashRouter>

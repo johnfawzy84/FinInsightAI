@@ -13,6 +13,7 @@ import { AssetManagerModal } from './AssetManagerModal';
 import { ExpandedChartModal } from './ExpandedChartModal';
 import { generateDynamicChart, predictRecurringExpenses } from '../services/gemini';
 import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon, Layers, Activity, Edit2, Sparkles, Loader2, RefreshCw, AlertCircle, Save, Check, X, Maximize2, Shield, ArrowUpRight, ArrowDownLeft, Zap } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -137,6 +138,7 @@ const GenericChartRenderer = ({ config, currency }: { config: any, currency: str
 
 const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAssets, activeSession, onUpdateDashboardWidgets, currency, aiSettings }) => {
   const { theme } = useTheme();
+  const { t } = useTranslation();
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -477,7 +479,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                 <div className="flex flex-col h-full">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><TrendingUp className="text-secondary" size={20}/> {widget.title}</h3>
+                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><TrendingUp className="text-secondary" size={20}/> {t('dashboard.netWorth')}</h3>
                             <p className="text-xs text-textMuted">Wealth based on cash flow + assets</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -506,7 +508,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                   <div className="flex flex-col h-full">
                     <div className="mb-4 flex justify-between items-start">
                         <div>
-                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><PieIcon className="text-purple-400" size={20}/> {widget.title}</h3>
+                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><PieIcon className="text-purple-400" size={20}/> {t('dashboard.totalAssets')}</h3>
                             <p className="text-xs text-textMuted">Portfolio Distribution</p>
                         </div>
                         <div className="flex gap-2">
@@ -589,7 +591,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                   <div className="flex flex-col h-full">
                      <div className="mb-6 flex justify-between items-end">
                         <div>
-                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Activity className="text-primary" size={20}/> {widget.title}</h3>
+                            <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Activity className="text-primary" size={20}/> {t('dashboard.cashFlow')}</h3>
                             <p className="text-xs text-textMuted">Monthly Income vs Expenses</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -614,7 +616,7 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, assets, onUpdateAss
                    <div className="flex flex-col h-full">
                         <div className="mb-4 flex justify-between items-start">
                             <div>
-                                <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {widget.title}</h3>
+                                <h3 className="text-xl font-bold text-textMain flex items-center gap-2"><Layers className="text-amber-400" size={20}/> {t('dashboard.expenses')}</h3>
                                 <p className="text-xs text-textMuted">Distribution of expenses</p>
                             </div>
                             <div className="flex items-center gap-2">

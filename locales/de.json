@@ -1,0 +1,50 @@
+{
+  "sidebar": {
+    "sessions": "Sitzungen",
+    "newSession": "Neue Sitzung",
+    "dashboard": "Dashboard",
+    "transactions": "Transaktionen",
+    "budgets": "Budgets",
+    "goals": "Ziele",
+    "settings": "Einstellungen",
+    "consultAI": "KI Konsultieren",
+    "documentation": "Dokumentation",
+    "reportBug": "Fehler melden / Funktion anfragen",
+    "installApp": "App installieren",
+    "importTo": "Importieren nach",
+    "localSession": "Lokale Sitzung",
+    "cloudActive": "Cloud Aktiv",
+    "syncing": "Synchronisieren..."
+  },
+  "app": {
+    "financialOverview": "Finanzübersicht",
+    "transactionHistory": "Transaktionsverlauf",
+    "goalsAllocations": "Ziele & Zuweisungen",
+    "spendingBudgets": "Ausgabenbudgets",
+    "sessionSettings": "Sitzungseinstellungen",
+    "descDashboard": "Verfolgen Sie Ihr Vermögen und Ihre regelmäßigen Ausgaben.",
+    "descTransactions": "Verwalten und organisieren Sie Ihre Finanzunterlagen.",
+    "descGoals": "Simulieren, priorisieren und finanzieren Sie Ihre Träume.",
+    "descBudgets": "Überwachen Sie die Ausgaben der Kategorien im Vergleich zu Ihren Limits.",
+    "descSettings": "Konfigurieren Sie Cloud-Synchronisierung und Regeln.",
+    "aiAutoCategorize": "KI Auto-Kategorisieren",
+    "categorizing": "Kategorisieren..."
+  },
+  "settings": {
+    "language": "Sprache",
+    "english": "Englisch",
+    "german": "Deutsch"
+  },
+  "dashboard": {
+    "netWorth": "Nettovermögen",
+    "totalAssets": "Gesamtvermögen",
+    "totalLiabilities": "Gesamtverbindlichkeiten",
+    "cashFlow": "Cashflow",
+    "income": "Einkommen",
+    "expenses": "Ausgaben",
+    "savingsRate": "Sparquote",
+    "recentTransactions": "Letzte Transaktionen",
+    "viewAll": "Alle anzeigen",
+    "noTransactions": "Keine Transaktionen gefunden."
+  }
+}

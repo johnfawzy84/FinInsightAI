@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Session, CategorizationRule, ImportSettings, Transaction, DashboardWidget, GoogleUser, AISettings } from '../types';
 import { useTheme } from './ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { 
   FileJson, 
   Download, 
@@ -147,6 +148,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   ];
 
   const { theme, setTheme } = useTheme();
+  const { t, i18n } = useTranslation();
+
+  const handleLanguageChange = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem('finsight_language', lng);
+  };
 
   return (
     <div className="space-y-8 animate-fade-in pb-20 relative">
@@ -183,6 +190,21 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${theme === 'system' ? 'bg-surface text-primary shadow-sm' : 'text-textMuted hover:text-textMain'}`}
                 >
                     <Monitor size={16} /> System
+                </button>
+            </div>
+            
+            <div className="flex bg-surfaceHighlight p-1 rounded-xl border border-border w-full max-w-xs">
+                <button 
+                    onClick={() => handleLanguageChange('en')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${i18n.language === 'en' ? 'bg-surface text-primary shadow-sm' : 'text-textMuted hover:text-textMain'}`}
+                >
+                    <Globe size={16} /> {t('settings.english')}
+                </button>
+                <button 
+                    onClick={() => handleLanguageChange('de')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${i18n.language === 'de' ? 'bg-surface text-primary shadow-sm' : 'text-textMuted hover:text-textMain'}`}
+                >
+                    <Globe size={16} /> {t('settings.german')}
                 </button>
             </div>
         </div>

@@ -1,0 +1,50 @@
+{
+  "sidebar": {
+    "sessions": "Sessions",
+    "newSession": "New Session",
+    "dashboard": "Dashboard",
+    "transactions": "Transactions",
+    "budgets": "Budgets",
+    "goals": "Goals",
+    "settings": "Settings",
+    "consultAI": "Consult AI",
+    "documentation": "Documentation",
+    "reportBug": "Report Bug / Request Feature",
+    "installApp": "Install App",
+    "importTo": "Import to",
+    "localSession": "Local Session",
+    "cloudActive": "Cloud Active",
+    "syncing": "Syncing..."
+  },
+  "app": {
+    "financialOverview": "Financial Overview",
+    "transactionHistory": "Transaction History",
+    "goalsAllocations": "Goals & Allocations",
+    "spendingBudgets": "Spending Budgets",
+    "sessionSettings": "Session Settings",
+    "descDashboard": "Track your wealth and regular spending.",
+    "descTransactions": "Manage and organize your financial records.",
+    "descGoals": "Simulate, prioritize, and fund your dreams.",
+    "descBudgets": "Monitor category spending against your limits.",
+    "descSettings": "Configure cloud sync and rules.",
+    "aiAutoCategorize": "AI Auto-Categorize",
+    "categorizing": "Categorizing..."
+  },
+  "settings": {
+    "language": "Language",
+    "english": "English",
+    "german": "German"
+  },
+  "dashboard": {
+    "netWorth": "Net Worth",
+    "totalAssets": "Total Assets",
+    "totalLiabilities": "Total Liabilities",
+    "cashFlow": "Cash Flow",
+    "income": "Income",
+    "expenses": "Expenses",
+    "savingsRate": "Savings Rate",
+    "recentTransactions": "Recent Transactions",
+    "viewAll": "View All",
+    "noTransactions": "No transactions found."
+  }
+}

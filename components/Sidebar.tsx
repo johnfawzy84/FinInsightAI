@@ -20,10 +20,12 @@ import {
   CloudOff,
   RefreshCw,
   LogOut,
-  Bug
+  Bug,
+  BookOpen
 } from 'lucide-react';
 import { Session, GoogleUser } from '../types';
 import { currentVersion } from '../changelog';
+import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   sessions: Session[];
@@ -43,6 +45,7 @@ interface SidebarProps {
   isSyncing: boolean;
   onCloudSync: () => void;
   onOpenChangelog: () => void;
+  onOpenDocumentation: () => void;
   onInstall?: () => void;
 }
 
@@ -64,8 +67,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   isSyncing,
   onCloudSync,
   onOpenChangelog,
+  onOpenDocumentation,
   onInstall
 }) => {
+  const { t } = useTranslation();
   const [isSessionsExpanded, setIsSessionsExpanded] = useState(true);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
@@ -121,14 +126,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <span className="text-[10px] font-bold text-textMain truncate">{googleUser.name}</span>
                         <span className="text-[9px] text-primary flex items-center gap-1">
                             {isSyncing ? <RefreshCw size={8} className="animate-spin" /> : <Cloud size={8} />}
-                            {isSyncing ? 'Syncing...' : 'Cloud Active'}
+                            {isSyncing ? t('sidebar.syncing') : t('sidebar.cloudActive')}
                         </span>
                     </div>
                 </div>
             ) : (
                 <div className="flex items-center gap-2 text-textMuted italic">
                     <CloudOff size={14} />
-                    <span className="text-[10px] font-semibold">Local Session</span>
+                    <span className="text-[10px] font-semibold">{t('sidebar.localSession')}</span>
                 </div>
             )}
             {googleUser && (
@@ -151,7 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             className="flex items-center justify-between text-[10px] font-bold text-textMuted uppercase tracking-widest mb-2 cursor-pointer hover:text-textMain transition-colors"
             onClick={() => setIsSessionsExpanded(!isSessionsExpanded)}
           >
-            <span>Sessions</span>
+            <span>{t('sidebar.sessions')}</span>
             {isSessionsExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </div>
         )}
@@ -207,7 +212,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => setIsCreatingSession(true)} 
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-textMuted hover:text-primary transition-colors"
                 >
-                  <Plus size={12} /> New Session
+                  <Plus size={12} /> {t('sidebar.newSession')}
                 </button>
               )
             )}
@@ -218,11 +223,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Nav Section */}
       <div className={`flex-1 py-4 space-y-1.5 px-4 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
         {[
-          { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-          { id: 'transactions', icon: List, label: 'Transactions' },
-          { id: 'budgets', icon: Wallet, label: 'Budgets' },
-          { id: 'goals', icon: Target, label: 'Goals' },
-          { id: 'settings', icon: Settings, label: 'Settings' },
+          { id: 'dashboard', icon: LayoutDashboard, label: t('sidebar.dashboard') },
+          { id: 'transactions', icon: List, label: t('sidebar.transactions') },
+          { id: 'budgets', icon: Wallet, label: t('sidebar.budgets') },
+          { id: 'goals', icon: Target, label: t('sidebar.goals') },
+          { id: 'settings', icon: Settings, label: t('sidebar.settings') },
         ].map((item) => (
           <button 
             key={item.id}
@@ -250,29 +255,38 @@ const Sidebar: React.FC<SidebarProps> = ({
               ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg' 
               : 'text-textMuted hover:bg-surfaceHighlight hover:text-textMain'
           } ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
-          title={isCollapsed ? 'Consult AI' : ''}
+          title={isCollapsed ? t('sidebar.consultAI') : ''}
         >
           <MessageSquareText size={18} />
-          {!isCollapsed && <span className="font-medium text-sm">Consult AI</span>}
+          {!isCollapsed && <span className="font-medium text-sm">{t('sidebar.consultAI')}</span>}
+        </button>
+
+        <button 
+          onClick={onOpenDocumentation}
+          className={`w-full flex items-center rounded-xl transition-all text-textMuted hover:bg-surfaceHighlight hover:text-primary ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
+          title={isCollapsed ? t('sidebar.documentation') : ''}
+        >
+          <BookOpen size={18} />
+          {!isCollapsed && <span className="font-medium text-sm">{t('sidebar.documentation')}</span>}
         </button>
 
         <button 
           onClick={handleReportBug}
           className={`w-full flex items-center rounded-xl transition-all text-textMuted hover:bg-surfaceHighlight hover:text-danger ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
-          title={isCollapsed ? 'Report Bug' : ''}
+          title={isCollapsed ? t('sidebar.reportBug') : ''}
         >
           <Bug size={18} />
-          {!isCollapsed && <span className="font-medium text-sm">Report Bug / Request Feature</span>}
+          {!isCollapsed && <span className="font-medium text-sm">{t('sidebar.reportBug')}</span>}
         </button>
 
         {onInstall && (
           <button 
             onClick={onInstall}
             className={`w-full flex items-center rounded-xl transition-all text-secondary bg-secondary/10 hover:bg-secondary/20 ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-2.5'}`}
-            title={isCollapsed ? 'Install App' : ''}
+            title={isCollapsed ? t('sidebar.installApp') : ''}
           >
             <ShieldCheck size={18} />
-            {!isCollapsed && <span className="font-medium text-sm">Install App</span>}
+            {!isCollapsed && <span className="font-medium text-sm">{t('sidebar.installApp')}</span>}
           </button>
         )}
       </div>
@@ -286,7 +300,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <Upload size={isCollapsed ? 16 : 20} className="text-textMuted group-hover:text-primary" />
           {!isCollapsed && (
             <p className="text-[10px] text-textMuted group-hover:text-textMain text-center px-2 mt-1 uppercase font-bold tracking-tight">
-               Import to <span className="text-primary">{activeSessionName}</span>
+               {t('sidebar.importTo')} <span className="text-primary">{activeSessionName}</span>
             </p>
           )}
         </button>
